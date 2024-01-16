@@ -6,11 +6,15 @@
 
 # build
 /dist
+monarch-amazon-sync.zip
 
 # etc
 .DS_Store
 .env.local
 .idea
+
+# env
+.env
 
 # compiled
 utils/reload/*.js

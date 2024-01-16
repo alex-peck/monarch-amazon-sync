@@ -1,44 +1,59 @@
-import React from 'react';
-import logo from '@assets/img/logo.svg';
-import '@pages/popup/Popup.css';
-import useStorage from '@src/shared/hooks/useStorage';
-import exampleThemeStorage from '@src/shared/storages/exampleThemeStorage';
-import withSuspense from '@src/shared/hoc/withSuspense';
-import withErrorBoundary from '@src/shared/hoc/withErrorBoundary';
+import useStorage from '@root/src/shared/hooks/useStorage';
+import Options from './Options';
+import Main from './Main';
+import ManualBackfill from './ManualBackfill';
+import { Navbar } from 'flowbite-react';
+import appStorage, { Page } from '@root/src/shared/storages/appStorage';
 
 const Popup = () => {
-  const theme = useStorage(exampleThemeStorage);
+  const storage = useStorage(appStorage);
+
+  let page;
+  if (storage.page === Page.Options) {
+    page = <Options />;
+  } else if (storage.page === Page.ManualBackfill) {
+    page = <ManualBackfill />;
+  } else {
+    page = <Main />;
+  }
 
   return (
-    <div
-      className="App"
-      style={{
-        backgroundColor: theme === 'light' ? '#fff' : '#000',
-      }}>
-      <header className="App-header" style={{ color: theme === 'light' ? '#000' : '#fff' }}>
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/pages/popup/Popup.tsx</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ color: theme === 'light' && '#0281dc', marginBottom: '10px' }}>
-          Learn React!
-        </a>
-        <button
-          style={{
-            backgroundColor: theme === 'light' ? '#fff' : '#000',
-            color: theme === 'light' ? '#000' : '#fff',
-          }}
-          onClick={exampleThemeStorage.toggle}>
-          Toggle theme
-        </button>
-      </header>
+    <div className="flex flex-col">
+      <Navbar rounded fluid className="py-1">
+        <Navbar.Brand>
+          <img src="/icon-128.png" className="mr-3 h-6 sm:h-9" alt="logo" />
+          <span className="self-center flex-1 whitespace-nowrap text-lg font-semibold dark:text-white">
+            Monarch / Amazon Sync
+          </span>
+        </Navbar.Brand>
+        <Navbar.Toggle />
+        <Navbar.Collapse>
+          <Navbar.Link
+            active={storage.page == Page.Default}
+            onClick={() => {
+              appStorage.patch({ page: Page.Default });
+            }}>
+            Home
+          </Navbar.Link>
+          <Navbar.Link
+            active={storage.page == Page.Options}
+            onClick={() => {
+              appStorage.patch({ page: Page.Options });
+            }}>
+            Options
+          </Navbar.Link>
+          <Navbar.Link
+            active={storage.page == Page.ManualBackfill}
+            onClick={() => {
+              appStorage.patch({ page: Page.ManualBackfill });
+            }}>
+            Manual backfill
+          </Navbar.Link>
+        </Navbar.Collapse>
+      </Navbar>
+      {page}
     </div>
   );
 };
 
-export default withErrorBoundary(withSuspense(Popup, <div> Loading ... </div>), <div> Error Occur </div>);
+export default Popup;

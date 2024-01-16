@@ -3,6 +3,8 @@
     "noEmit": true,
     "baseUrl": ".",
     "allowJs": false,
+    "experimentalDecorators": true,
+    "strict": true,
     "target": "esnext",
     "module": "esnext",
     "jsx": "react-jsx",

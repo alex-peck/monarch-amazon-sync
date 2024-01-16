@@ -1,4 +1,4 @@
-import { Component, ComponentType, ReactElement } from 'react';
+import { Component, ComponentType, ErrorInfo, ReactElement } from 'react';
 
 class ErrorBoundary extends Component<
   {
@@ -15,7 +15,7 @@ class ErrorBoundary extends Component<
     return { hasError: true };
   }
 
-  componentDidCatch(error, errorInfo) {
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error(error, errorInfo);
   }
 

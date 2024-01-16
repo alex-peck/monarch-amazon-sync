@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "after:bump": "pnpm run build-and-zip"
+  },
+  "git": {
+    "commitMessage": "Release v${version}"
+  },
+  "github": {
+    "release": true,
+    "releaseName": "v${version}",
+    "assets": ["monarch-amazon-sync.zip"],
+    "autoGenerate": true
+  },
+  "npm": {
+    "publish": false
+  }
+}

@@ -41,13 +41,14 @@ export enum SessionAccessLevel {
   ExtensionPagesAndContentScripts = 'TRUSTED_AND_UNTRUSTED_CONTEXTS',
 }
 
-type ValueOrUpdate<D> = D | ((prev: D) => Promise<D> | D);
+type ValueOrUpdate<D> = D | ((prev: D | null) => Promise<D> | D);
 
 export type BaseStorage<D> = {
   get: () => Promise<D>;
   set: (value: ValueOrUpdate<D>) => Promise<void>;
   getSnapshot: () => D | null;
   subscribe: (listener: () => void) => () => void;
+  patch: (value: Partial<D>) => Promise<void>;
 };
 
 type StorageConfig = {
@@ -76,7 +77,7 @@ type StorageConfig = {
  */
 async function updateCache<D>(valueOrUpdate: ValueOrUpdate<D>, cache: D | null): Promise<D> {
   // Type guard to check if our value or update is a function
-  function isFunction<D>(value: ValueOrUpdate<D>): value is (prev: D) => D | Promise<D> {
+  function isFunction<D>(value: ValueOrUpdate<D>): value is (prev: D | null) => D | Promise<D> {
     return typeof value === 'function';
   }
 
@@ -153,6 +154,13 @@ export function createStorage<D>(key: string, fallback: D, config?: StorageConfi
     _emitChange();
   };
 
+  const patch = (value: Partial<D>) => {
+    return set(prev => {
+      if (prev === null) return value as D;
+      return { ...prev, ...value };
+    });
+  };
+
   const subscribe = (listener: () => void) => {
     listeners = [...listeners, listener];
     return () => {
@@ -193,5 +201,6 @@ export function createStorage<D>(key: string, fallback: D, config?: StorageConfi
     set,
     getSnapshot,
     subscribe,
+    patch,
   };
 }
