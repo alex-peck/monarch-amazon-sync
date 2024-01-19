@@ -38,7 +38,7 @@ This will allow easy categorization Amazon purchases in Monarch without the need
 3. Optionally run in "dry-run" mode to create a CSV of what changes will be made before actually making them.
 
 ## Screenshots
-<img width="313" alt="image" src="https://github.com/alex-peck/monarch-amazon-sync/assets/53013351/e503255a-32ce-4b8a-9208-3e569f3c2795">
+<img width="316" alt="image" src="https://github.com/alex-peck/monarch-amazon-sync/assets/53013351/cf23b1c4-b1f5-4d3d-90fc-3a001ff05274">
 
 ## Contributions
 
