@@ -238,7 +238,12 @@ async function updateMonarchTransactions() {
   );
 
   for (const data of matches) {
-    const itemString = data.amazon.items.join('\n\n').trim();
+    const itemString = data.amazon.items
+      .map(item => {
+        return item.title + ' - $' + item.price;
+      })
+      .join('\n\n')
+      .trim();
     if (itemString.length === 0) continue;
     if (data.monarch.notes === itemString) continue;
 

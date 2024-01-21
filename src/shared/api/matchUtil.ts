@@ -16,12 +16,12 @@ export function matchTransactions(
   const orderTransactions = orders.flatMap(order => {
     return order.transactions.map(transaction => {
       return {
-        items: order.items,
+        items: transaction.items,
         refund: transaction.refund,
         amount: transaction.refund ? transaction.amount : transaction.amount * -1,
         date: transaction.date,
         used: false,
-        id: transaction.id,
+        id: order.id,
       };
     });
   });

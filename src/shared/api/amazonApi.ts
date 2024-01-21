@@ -11,9 +11,13 @@ export type AmazonInfo = {
 };
 
 export type Order = {
-  items: string[];
-  used?: boolean;
+  id: string;
   transactions: OrderTransaction[];
+};
+
+export type Item = {
+  title: string;
+  price: number;
 };
 
 export type OrderTransaction = {
@@ -21,7 +25,7 @@ export type OrderTransaction = {
   amount: number;
   date: string;
   refund: boolean;
-  items: string[];
+  items: Item[];
 };
 
 export async function checkAmazonAuth(): Promise<AmazonInfo> {
@@ -143,11 +147,15 @@ async function fetchOrderNew(order: string): Promise<Order> {
   const text = await res.text();
   const $ = load(text);
 
-  const items: string[] = [];
+  const items: Item[] = [];
   $('.yohtmlc-item').each((_, el) => {
     const item = $(el).find('.a-link-normal').first()?.text()?.trim();
+    const price = parseFloat($(el).find('.a-color-price').first()?.text()?.trim().replace('$', ''));
     if (item) {
-      items.push(item);
+      items.push({
+        title: item,
+        price,
+      });
     }
   });
 
@@ -184,7 +192,7 @@ async function fetchOrderNew(order: string): Promise<Order> {
     });
 
   return {
+    id: order,
     transactions,
-    items,
   };
 }
