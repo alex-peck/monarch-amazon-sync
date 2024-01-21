@@ -10,13 +10,24 @@ import { Action } from '@root/src/shared/types';
 
 reloadOnUpdate('pages/background');
 
-// Sync alarms
-chrome.runtime.onInstalled.addListener(async () => {
-  await chrome.alarms.create('sync-alarm', {
-    delayInMinutes: 60,
-    periodInMinutes: 24 * 60,
-  });
-});
+async function checkAlarm() {
+  const alarm = await chrome.alarms.get('sync-alarm');
+
+  if (!alarm) {
+    const { lastSync } = await appStorage.get();
+    const lastTime = new Date(lastSync?.time || 0);
+    const sinceLastSync = Date.now() - lastTime.getTime() / (1000 * 60);
+    const delayInMinutes = Math.max(0, 24 * 60 - sinceLastSync);
+
+    await chrome.alarms.create('sync-alarm', {
+      delayInMinutes: delayInMinutes,
+      periodInMinutes: 24 * 60,
+    });
+  }
+}
+
+// Setup alarms for syncing
+checkAlarm();
 chrome.alarms.onAlarm.addListener(async alarm => {
   if (alarm.name === 'sync-alarm') {
     const { amazonStatus, monarchStatus, options } = await appStorage.get();
