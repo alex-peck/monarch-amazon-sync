@@ -27,6 +27,9 @@ This will allow easy categorization Amazon purchases in Monarch without the need
 
 ## How to use
 
+1. Once the extension is installed, it will check if you are logged in to your Amazon account. Make sure you are logged in!
+2. Open Monarch in your browser. This will allow the extension to grab the necessary API key from the page. After that you shouldn't need to keep the page open.
+
 ### Daily sync
 1. Turn on "Sync"
 2. Every day, the extension will check for new Amazon purchases and sync them to Monarch.
