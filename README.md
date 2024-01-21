@@ -13,6 +13,7 @@ This will allow easy categorization Amazon purchases in Monarch without the need
 
 - Checks for new Amazon purchases daily in the background and automatically syncs them to new Monarch transactions. NOTE: sync occurs when your browser is open
 - Backfill past years of Amazon purchases to Monarch transaction notes
+- Handles refunds and multi-item orders.
 
 ## Installation
 
