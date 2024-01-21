@@ -5,13 +5,13 @@
 
 ## What is this?
 
-A simple Chrome extension to sync Amazon purchases with [Monarch](https://monarchmoney.com) transactions. Transactions in Monarch that match the time and amount of an Amazon purchase will have a note created in Monarch with the Amazon item names.
+A simple Chrome extension to sync Amazon purchases with [Monarch](https://monarchmoney.com) transactions. Transactions in Monarch that match the time and amount of an Amazon purchase will have a note created in Monarch with the Amazon item details.
 
 This will allow easy categorization Amazon purchases in Monarch without the need to go back and forth from Amazon to Monarch figure out what you bought.
 
 ## Features
 
-- Checks for new Amazon purchases daily in the background and automatically syncs them to new Monarch purchases. NOTE: sync occurs when your browser is open
+- Checks for new Amazon purchases daily in the background and automatically syncs them to new Monarch transactions. NOTE: sync occurs when your browser is open
 - Backfill past years of Amazon purchases to Monarch transaction notes
 
 ## Installation
@@ -39,6 +39,11 @@ This will allow easy categorization Amazon purchases in Monarch without the need
 1. Choose "Manual backfill"
 2. Pick a year to backfill
 3. Optionally run in "dry-run" mode to create a CSV of what changes will be made before actually making them.
+
+## Known limitations
+- Occasionally Amazon will break up a single order of many items into separate credit card transactions.
+In this case, it is not currently possible to tell which items belong to which transaction.
+To handle this, this extension will always populate all items in an order on every Monarch transaction associated with that Amazon order.
 
 ## Screenshots
 <img width="319" alt="image" src="https://github.com/alex-peck/monarch-amazon-sync/assets/53013351/af77f2b8-d92f-42ff-bc37-c7cedaf22fe9">
