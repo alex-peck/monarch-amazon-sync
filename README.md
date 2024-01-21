@@ -44,6 +44,7 @@ This will allow easy categorization Amazon purchases in Monarch without the need
 - Occasionally Amazon will break up a single order of many items into separate credit card transactions.
 In this case, it is not currently possible to tell which items belong to which transaction.
 To handle this, this extension will always populate all items in an order on every Monarch transaction associated with that Amazon order.
+- For the per-item amounts in each note, the amount is not including tax. There is not currently a way to get the amount of individual items including tax.
 
 ## Screenshots
 <img width="319" alt="image" src="https://github.com/alex-peck/monarch-amazon-sync/assets/53013351/af77f2b8-d92f-42ff-bc37-c7cedaf22fe9">
