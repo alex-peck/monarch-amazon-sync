@@ -1,10 +1,22 @@
 import useStorage from '@root/src/shared/hooks/useStorage';
 import appStorage from '@root/src/shared/storages/appStorage';
+import exceptionStorage from '@root/src/shared/storages/exceptionStorage';
 import { Label, TextInput, ToggleSwitch } from 'flowbite-react';
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 
 export function Options() {
   const { options } = useStorage(appStorage);
+  const { errors } = useStorage(exceptionStorage);
+
+  const downloadErrors = useCallback(() => {
+    const errorString = errors.join('\n');
+    const blob = new Blob([errorString], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    chrome.downloads.download({
+      url: url,
+      filename: 'error-dump.txt',
+    });
+  }, [errors]);
 
   useEffect(() => {
     if (!options) {
@@ -44,6 +56,13 @@ export function Options() {
           name if it does not already match.
         </span>
       </div>
+      {errors.length > 0 && (
+        <div className="mt-2">
+          <button className="btn btn-primary" onClick={downloadErrors}>
+            Download error report
+          </button>
+        </div>
+      )}
     </div>
   );
 }

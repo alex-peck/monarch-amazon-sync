@@ -1,6 +1,7 @@
 import { ProgressPhase, ProgressState } from '../storages/progressStorage';
 import { load } from 'cheerio';
 import * as Throttle from 'promise-parallel-throttle';
+import { logException } from '../storages/exceptionStorage';
 
 const ORDER_PAGES_URL = 'https://www.amazon.com/gp/css/order-history';
 const ORDER_DETAILS_URL = 'https://www.amazon.com/gp/your-account/order-details';
@@ -108,12 +109,16 @@ export async function fetchOrders(
   const allOrders: Order[] = [];
 
   const processOrder = async (order: string) => {
-    const orderData = await fetchOrderNew(order);
-    if (orderData) {
-      allOrders.push(orderData);
+    try {
+      const orderData = await fetchOrder(order);
+      if (orderData) {
+        allOrders.push(orderData);
+      }
+    } catch (e: unknown) {
+      logException(e as Error);
     }
+
     onProgress({ phase: ProgressPhase.AmazonOrderDownload, total: orders.length, complete: allOrders.length });
-    return 'test';
   };
 
   await Throttle.all(orders.map(order => () => processOrder(order)));
@@ -142,7 +147,7 @@ async function processOrders(year: number | undefined, page: number) {
   return orders;
 }
 
-async function fetchOrderNew(order: string): Promise<Order> {
+async function fetchOrder(order: string): Promise<Order> {
   const res = await fetch(ORDER_DETAILS_URL + '?orderID=' + order);
   const text = await res.text();
   const $ = load(text);

@@ -40,7 +40,7 @@ export function ProgressIndicator({ progress }: { progress: ProgressState }) {
       };
     });
 
-    const csvData = stringify(contents, { header: true, escape_formulas: true });
+    const csvData = stringify(contents, { header: true });
     const blob = new Blob([csvData], { type: 'text/csv' });
 
     const url = URL.createObjectURL(blob);
