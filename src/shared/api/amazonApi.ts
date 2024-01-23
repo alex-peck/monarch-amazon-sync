@@ -1,5 +1,6 @@
 import { ProgressPhase, ProgressState } from '../storages/progressStorage';
 import { load } from 'cheerio';
+import type { CheerioAPI } from 'cheerio';
 import * as Throttle from 'promise-parallel-throttle';
 import { debugLog } from '../storages/debugStorage';
 
@@ -97,13 +98,7 @@ export async function fetchOrders(
 
   onProgress({ phase: ProgressPhase.AmazonPageScan, total: endPage, complete: 0 });
 
-  let orders: string[] = [];
-  $('.order-card').each((_, el) => {
-    const order = $(el).find('.yohtmlc-order-id')?.text().trim().replace('\n', '').split('#')[1].trim();
-    if (order) {
-      orders.push(order);
-    }
-  });
+  let orders = orderListFromPage($);
   await debugLog('Found ' + orders.length + ' orders');
 
   onProgress({ phase: ProgressPhase.AmazonPageScan, total: endPage, complete: 1 });
@@ -123,7 +118,7 @@ export async function fetchOrders(
         allOrders.push(orderData);
       }
     } catch (e: unknown) {
-      await debugLog(e as string);
+      await debugLog(e);
     }
 
     onProgress({ phase: ProgressPhase.AmazonOrderDownload, total: orders.length, complete: allOrders.length });
@@ -145,16 +140,21 @@ async function processOrders(year: number | undefined, page: number) {
   await debugLog('Got orders response ' + res.status + ' for page ' + page);
   const text = await res.text();
   const $ = load(text);
+  return orderListFromPage($);
+}
 
+function orderListFromPage($: CheerioAPI): string[] {
   const orders: string[] = [];
   $('.order-card').each((_, el) => {
-    const order = $(el).find('.yohtmlc-order-id')?.text().trim().replace('\n', '').split('#')[1].trim();
-    if (order) {
-      orders.push(order);
+    try {
+      const order = $(el).find('.yohtmlc-order-id')?.text().trim().replace('\n', '').split('#')[1].trim();
+      if (order) {
+        orders.push(order);
+      }
+    } catch (e: unknown) {
+      debugLog(e);
     }
   });
-  await debugLog('Found ' + orders.length + ' orders');
-
   return orders;
 }
 

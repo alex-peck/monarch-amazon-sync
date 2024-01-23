@@ -160,7 +160,7 @@ async function downloadAndStoreTransactions(yearString?: string, dryRun: boolean
       await progressStorage.patch(progress);
     });
   } catch (e) {
-    await debugLog(e as string);
+    await debugLog(e);
     await logSyncComplete({ success: false, failureReason: FailureReason.AmazonError });
     return false;
   }
@@ -198,7 +198,7 @@ async function downloadAndStoreTransactions(yearString?: string, dryRun: boolean
       return false;
     }
   } catch (ex) {
-    await debugLog(ex as string);
+    await debugLog(ex);
     await logSyncComplete({ success: false, failureReason: FailureReason.MonarchError });
     return false;
   }
