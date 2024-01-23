@@ -1,22 +1,22 @@
 import useStorage from '@root/src/shared/hooks/useStorage';
 import appStorage from '@root/src/shared/storages/appStorage';
-import exceptionStorage from '@root/src/shared/storages/exceptionStorage';
+import debugStorage from '@root/src/shared/storages/debugStorage';
 import { Label, TextInput, ToggleSwitch } from 'flowbite-react';
 import { useCallback, useEffect } from 'react';
 
 export function Options() {
   const { options } = useStorage(appStorage);
-  const { errors } = useStorage(exceptionStorage);
+  const { logs } = useStorage(debugStorage);
 
-  const downloadErrors = useCallback(() => {
-    const errorString = errors.join('\n');
+  const downloadDebugLog = useCallback(() => {
+    const errorString = logs.join('\n');
     const blob = new Blob([errorString], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     chrome.downloads.download({
       url: url,
       filename: 'error-dump.txt',
     });
-  }, [errors]);
+  }, [logs]);
 
   useEffect(() => {
     if (!options) {
@@ -56,10 +56,10 @@ export function Options() {
           name if it does not already match.
         </span>
       </div>
-      {errors.length > 0 && (
+      {logs && logs.length > 0 && (
         <div className="mt-2">
-          <button className="btn btn-primary" onClick={downloadErrors}>
-            Download error report
+          <button className="btn btn-primary" onClick={downloadDebugLog}>
+            Download debug logs
           </button>
         </div>
       )}

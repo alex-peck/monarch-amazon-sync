@@ -7,6 +7,7 @@ import transactionStorage, { TransactionStatus } from '@root/src/shared/storages
 import { matchTransactions } from '@root/src/shared/api/matchUtil';
 import appStorage, { AuthStatus, FailureReason, LastSync } from '@root/src/shared/storages/appStorage';
 import { Action } from '@root/src/shared/types';
+import debugStorage, { debugLog } from '@root/src/shared/storages/debugStorage';
 
 reloadOnUpdate('pages/background');
 
@@ -124,6 +125,7 @@ async function handleFullSync(payload: Payload | undefined, sendResponse: (args:
 }
 
 async function logSyncComplete(payload: Partial<LastSync>) {
+  await debugLog('Sync complete');
   await progressStorage.patch({ phase: ProgressPhase.Complete });
   await appStorage.patch({
     lastSync: {
@@ -139,6 +141,8 @@ async function logSyncComplete(payload: Partial<LastSync>) {
 }
 
 async function downloadAndStoreTransactions(yearString?: string, dryRun: boolean = false) {
+  await debugStorage.set({ logs: [] });
+
   const appData = await appStorage.get();
   const year = yearString ? parseInt(yearString) : undefined;
 
@@ -151,15 +155,18 @@ async function downloadAndStoreTransactions(yearString?: string, dryRun: boolean
 
   let orders: Order[];
   try {
+    await debugLog('Fetching Amazon orders');
     orders = await fetchOrders(year, async progress => {
       await progressStorage.patch(progress);
     });
-  } catch {
-    await logSyncComplete({ success: false, failureReason: FailureReason.NoAmazonAuth });
+  } catch (e) {
+    await debugLog(e as string);
+    await logSyncComplete({ success: false, failureReason: FailureReason.AmazonError });
     return false;
   }
 
   if (!orders || orders.length === 0) {
+    await debugLog('No Amazon orders found');
     await logSyncComplete({ success: false, failureReason: FailureReason.NoAmazonOrders });
     return false;
   }
@@ -184,13 +191,14 @@ async function downloadAndStoreTransactions(yearString?: string, dryRun: boolean
 
   let monarchTransactions: Transaction[];
   try {
+    await debugLog('Fetching Monarch transactions');
     monarchTransactions = await getTransactions(appData.monarchKey, appData.options.amazonMerchant, startDate, endDate);
     if (!monarchTransactions || monarchTransactions.length === 0) {
       await logSyncComplete({ success: false, failureReason: FailureReason.NoMonarchTransactions });
       return false;
     }
   } catch (ex) {
-    console.log(ex);
+    await debugLog(ex as string);
     await logSyncComplete({ success: false, failureReason: FailureReason.MonarchError });
     return false;
   }
@@ -244,11 +252,17 @@ async function updateMonarchTransactions() {
       })
       .join('\n\n')
       .trim();
-    if (itemString.length === 0) continue;
-    if (data.monarch.notes === itemString) continue;
+    if (itemString.length === 0) {
+      await debugLog('No items found for transaction ' + data.monarch.id);
+      continue;
+    }
+    if (data.monarch.notes === itemString) {
+      await debugLog('Transaction ' + data.monarch.id + ' already has correct note');
+      continue;
+    }
 
     updateMonarchTransaction(appData.monarchKey, data.monarch.id, itemString);
-    console.log('Updated transaction ' + data.monarch.id + ' with note ' + itemString);
+    await debugLog('Updated transaction ' + data.monarch.id + ' with note ' + itemString);
     await progressStorage.patch({
       total: matches.length,
       complete: matches.indexOf(data) + 1,

@@ -17,6 +17,7 @@ export enum FailureReason {
   Unknown = 'unknown',
   NoAmazonOrders = 'noAmazonOrders',
   NoAmazonAuth = 'noAmazonAuth',
+  AmazonError = 'amazonError',
   NoMonarchAuth = 'noMonarchAuth',
   MonarchError = 'monarchError',
   NoMonarchTransactions = 'noMonarchTransactions',
@@ -28,6 +29,8 @@ export const mapFailureReasonToMessage = (reason: FailureReason | undefined): st
       return 'No Amazon orders found';
     case FailureReason.NoAmazonAuth:
       return 'Amazon authorization failed';
+    case FailureReason.AmazonError:
+      return 'An error occurred while fetching Amazon orders';
     case FailureReason.NoMonarchAuth:
       return 'Monarch authorization failed';
     case FailureReason.MonarchError:

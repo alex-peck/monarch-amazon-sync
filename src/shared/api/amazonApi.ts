@@ -1,7 +1,7 @@
 import { ProgressPhase, ProgressState } from '../storages/progressStorage';
 import { load } from 'cheerio';
 import * as Throttle from 'promise-parallel-throttle';
-import { logException } from '../storages/exceptionStorage';
+import { debugLog } from '../storages/debugStorage';
 
 const ORDER_PAGES_URL = 'https://www.amazon.com/gp/css/order-history';
 const ORDER_DETAILS_URL = 'https://www.amazon.com/gp/your-account/order-details';
@@ -31,13 +31,16 @@ export type OrderTransaction = {
 
 export async function checkAmazonAuth(): Promise<AmazonInfo> {
   try {
+    debugLog('Checking Amazon auth');
     const res = await fetch(ORDER_PAGES_URL);
+    await debugLog('Got Amazon auth response' + res.status);
     const text = await res.text();
     const $ = load(text);
 
     const signIn = $('#signInSubmit');
 
     if (signIn.length > 0) {
+      await debugLog('Amazon auth failed');
       return {
         success: false,
       };
@@ -54,11 +57,13 @@ export async function checkAmazonAuth(): Promise<AmazonInfo> {
     // find the lowest year
     const lowestYear = Math.min(...yearOptions.map(x => parseInt(x)));
 
+    await debugLog('Amazon auth success');
     return {
       success: true,
       startingYear: lowestYear,
     };
-  } catch {
+  } catch (e) {
+    await debugLog('Amazon auth failed with error: ' + e);
     return {
       success: false,
     };
@@ -73,7 +78,9 @@ export async function fetchOrders(
   if (year) {
     url += `?timeFilter=year-${year}`;
   }
+  await debugLog('Fetching orders from ' + url);
   const res = await fetch(url);
+  await debugLog('Got orders response ' + res.status);
   const text = await res.text();
   const $ = load(text);
 
@@ -97,6 +104,7 @@ export async function fetchOrders(
       orders.push(order);
     }
   });
+  await debugLog('Found ' + orders.length + ' orders');
 
   onProgress({ phase: ProgressPhase.AmazonPageScan, total: endPage, complete: 1 });
 
@@ -115,7 +123,7 @@ export async function fetchOrders(
         allOrders.push(orderData);
       }
     } catch (e: unknown) {
-      logException(e as Error);
+      await debugLog(e as string);
     }
 
     onProgress({ phase: ProgressPhase.AmazonOrderDownload, total: orders.length, complete: allOrders.length });
@@ -132,7 +140,9 @@ async function processOrders(year: number | undefined, page: number) {
   if (year) {
     url += `&timeFilter=year-${year}`;
   }
+  await debugLog('Fetching orders from ' + url);
   const res = await fetch(url);
+  await debugLog('Got orders response ' + res.status + ' for page ' + page);
   const text = await res.text();
   const $ = load(text);
 
@@ -143,12 +153,15 @@ async function processOrders(year: number | undefined, page: number) {
       orders.push(order);
     }
   });
+  await debugLog('Found ' + orders.length + ' orders');
 
   return orders;
 }
 
 async function fetchOrder(order: string): Promise<Order> {
+  await debugLog('Fetching order ' + order);
   const res = await fetch(ORDER_DETAILS_URL + '?orderID=' + order);
+  await debugLog('Got order response ' + res.status + ' for order ' + order);
   const text = await res.text();
   const $ = load(text);
 
