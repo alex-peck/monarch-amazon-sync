@@ -5,7 +5,8 @@ import * as Throttle from 'promise-parallel-throttle';
 import { debugLog } from '../storages/debugStorage';
 
 const ORDER_PAGES_URL = 'https://www.amazon.com/gp/css/order-history';
-const ORDER_DETAILS_URL = 'https://www.amazon.com/gp/your-account/order-details';
+const ORDER_INVOICE_URL =
+  'https://www.amazon.com/gp/css/summary/print.html/ref=ppx_yo_dt_b_invoice_o00?ie=UTF8&orderID=';
 
 export type AmazonInfo = {
   success: boolean;
@@ -160,15 +161,15 @@ function orderListFromPage($: CheerioAPI): string[] {
 
 async function fetchOrder(order: string): Promise<Order> {
   await debugLog('Fetching order ' + order);
-  const res = await fetch(ORDER_DETAILS_URL + '?orderID=' + order);
+  const res = await fetch(ORDER_INVOICE_URL + order);
   await debugLog('Got order response ' + res.status + ' for order ' + order);
   const text = await res.text();
   const $ = load(text);
 
   const items: Item[] = [];
-  $('.yohtmlc-item').each((_, el) => {
-    const item = $(el).find('.a-link-normal').first()?.text()?.trim();
-    const price = parseFloat($(el).find('.a-color-price').first()?.text()?.trim().replace('$', ''));
+  $('tr > input + td').each((_, el) => {
+    const item = $(el).find('i').first()?.text()?.trim();
+    const price = parseFloat($(el).next('td')?.text()?.trim().replace('$', ''));
     if (item) {
       items.push({
         title: item,
@@ -179,35 +180,67 @@ async function fetchOrder(order: string): Promise<Order> {
 
   const transactions: OrderTransaction[] = [];
 
-  const fullDetails = $('.a-expander-inline-content ').first();
-  $(fullDetails)
-    .find('.a-row')
-    .each((_, el) => {
-      const line = $(el).text().trim().replaceAll('\n', '');
-      if (line.includes('Items shipped')) {
-        const dateAndAmount = line.split('shipped:')[1].trim();
-        const date = dateAndAmount.split('-')[0].trim();
-        const amount = parseFloat(dateAndAmount.split('-')[1].split('$')[1].trim());
-        transactions.push({
-          id: order,
-          date,
-          amount,
-          refund: false,
-          items,
-        });
-      } else if (line.includes('Refund: Completed')) {
-        const dateAndAmount = line.split(': Completed')[1].trim();
-        const date = dateAndAmount.split('-')[0].trim();
-        const amount = parseFloat(dateAndAmount.split('-')[1].split('$')[1].trim());
-        transactions.push({
-          id: order,
-          date,
-          amount,
-          refund: true,
-          items,
-        });
-      }
-    });
+  const container = $('body > table > tbody > tr > td');
+  const paymentTable = container.find('> table:last-of-type');
+  const [paymentRow, transactionsRow] = paymentTable.find('> tbody > tr > td > table > tbody > tr').toArray().slice(1);
+  if (transactionsRow) {
+    // List of individual credit card transactions, possibly on different dates
+    $(transactionsRow)
+      .find('table table tr')
+      .each((_, el) => {
+        // Payment method and date are separated by a nonbreaking space
+        const date = $(el)
+          .children()
+          .first()
+          .html()
+          ?.replace(/.*&nbsp;(.*?):.*/, '$1');
+        const amount = parseFloat(
+          $(el)
+            .children()
+            .last()
+            .text()
+            .replace(/[$\s-]/g, ''),
+        );
+        if (date && amount) {
+          transactions.push({
+            id: order,
+            date,
+            amount,
+            refund: false,
+            items,
+          });
+        }
+      });
+  } else {
+    // Single payment date, payment with include gift cards tracked as separate transaction
+    const metaTable = container.find('> table:first-of-type');
+    const dateCell = metaTable.find('tr:first-of-type td');
+    dateCell.find('b').remove();
+    const date = dateCell.text().trim();
+    // Find the subtotals, taxes, and totals table
+    $(paymentRow)
+      .find('table table table tbody tr')
+      .each((_, el) => {
+        const [labelCell, valueCell] = $(el).find('td').toArray();
+        if (/Grand Total|Gift Card Amount/.test($(labelCell).text())) {
+          const amount = parseFloat(
+            $(valueCell)
+              .text()
+              .replace(/[$\s-]/g, ''),
+          );
+          // Grand Total will be zero if paid in full by gift cards
+          if (amount) {
+            transactions.push({
+              id: order,
+              date,
+              amount,
+              refund: false,
+              items,
+            });
+          }
+        }
+      });
+  }
 
   return {
     id: order,
