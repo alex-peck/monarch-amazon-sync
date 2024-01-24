@@ -173,7 +173,7 @@ async function fetchOrderTransactions(order: Order): Promise<Order> {
   const items: Item[] = [];
   $('.yohtmlc-item').each((_, el) => {
     const item = $(el).find('.a-link-normal').first()?.text()?.trim();
-    const price = parseFloat($(el).find('.a-color-price').first()?.text()?.trim().replace('$', ''));
+    const price = moneyToNumber($(el).find('.a-color-price').first()?.text());
     if (item) {
       items.push({
         title: item,
@@ -184,6 +184,17 @@ async function fetchOrderTransactions(order: Order): Promise<Order> {
 
   const transactions: OrderTransaction[] = [];
 
+  const giftCardAmount = moneyToNumber($('#od-subtotals .a-column:contains("Gift Card") + .a-column').text());
+  if (giftCardAmount) {
+    transactions.push({
+      id: order.id,
+      date: order.date,
+      amount: giftCardAmount,
+      refund: false,
+      items,
+    });
+  }
+
   const fullDetails = $('.a-expander-inline-content ').first();
   $(fullDetails)
     .find('.a-row')
@@ -192,9 +203,9 @@ async function fetchOrderTransactions(order: Order): Promise<Order> {
       if (line.includes('Items shipped')) {
         const dateAndAmount = line.split('shipped:')[1].trim();
         const date = dateAndAmount.split('-')[0].trim();
-        const amount = parseFloat(dateAndAmount.split('-')[1].split('$')[1].trim());
+        const amount = moneyToNumber(dateAndAmount.split('-')[1].split('$')[1]);
         transactions.push({
-          id: order,
+          id: order.id,
           date,
           amount,
           refund: false,
@@ -203,9 +214,9 @@ async function fetchOrderTransactions(order: Order): Promise<Order> {
       } else if (line.includes('Refund: Completed')) {
         const dateAndAmount = line.split(': Completed')[1].trim();
         const date = dateAndAmount.split('-')[0].trim();
-        const amount = parseFloat(dateAndAmount.split('-')[1].split('$')[1].trim());
+        const amount = moneyToNumber(dateAndAmount.split('-')[1].split('$')[1]);
         transactions.push({
-          id: order,
+          id: order.id,
           date,
           amount,
           refund: true,
@@ -215,7 +226,11 @@ async function fetchOrderTransactions(order: Order): Promise<Order> {
     });
 
   return {
-    id: order,
+    ...order,
     transactions,
   };
+}
+
+function moneyToNumber(money: string, absoluteValue = true) {
+  return parseFloat(money?.replace(absoluteValue ? /[$\s-]/g : /[$\s]/g, ''));
 }
