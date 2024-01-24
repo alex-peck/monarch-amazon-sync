@@ -14,7 +14,8 @@ export type AmazonInfo = {
 
 export type Order = {
   id: string;
-  transactions: OrderTransaction[];
+  date: string;
+  transactions?: OrderTransaction[];
 };
 
 export type Item = {
@@ -111,9 +112,9 @@ export async function fetchOrders(
 
   const allOrders: Order[] = [];
 
-  const processOrder = async (order: string) => {
+  const processOrder = async (order: Order) => {
     try {
-      const orderData = await fetchOrder(order);
+      const orderData = await fetchOrderTransactions(order);
       if (orderData) {
         allOrders.push(orderData);
       }
@@ -143,13 +144,17 @@ async function processOrders(year: number | undefined, page: number) {
   return orderListFromPage($);
 }
 
-function orderListFromPage($: CheerioAPI): string[] {
-  const orders: string[] = [];
+function orderListFromPage($: CheerioAPI): Order[] {
+  const orders: Order[] = [];
   $('.order-card').each((_, el) => {
     try {
-      const order = $(el).find('.yohtmlc-order-id')?.text().trim().replace('\n', '').split('#')[1].trim();
-      if (order) {
-        orders.push(order);
+      const id = $(el).find('.yohtmlc-order-id')?.text().trim().replace('\n', '').split('#')[1].trim();
+      if (id) {
+        const date = $(el).find('.order-info .value')?.first().text().trim();
+        orders.push({
+          id,
+          date,
+        });
       }
     } catch (e: unknown) {
       debugLog(e);
@@ -158,10 +163,10 @@ function orderListFromPage($: CheerioAPI): string[] {
   return orders;
 }
 
-async function fetchOrder(order: string): Promise<Order> {
-  await debugLog('Fetching order ' + order);
-  const res = await fetch(ORDER_DETAILS_URL + '?orderID=' + order);
-  await debugLog('Got order response ' + res.status + ' for order ' + order);
+async function fetchOrderTransactions(order: Order): Promise<Order> {
+  await debugLog('Fetching order ' + order.id);
+  const res = await fetch(ORDER_DETAILS_URL + '?orderID=' + order.id);
+  await debugLog('Got order response ' + res.status + ' for order ' + order.id);
   const text = await res.text();
   const $ = load(text);
 
