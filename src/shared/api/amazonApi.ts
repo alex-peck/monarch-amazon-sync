@@ -147,7 +147,10 @@ function orderListFromPage($: CheerioAPI): string[] {
   const orders: string[] = [];
   $('.order-card').each((_, el) => {
     try {
-      const order = $(el).find('.yohtmlc-order-id')?.text().trim().replace('\n', '').split('#')[1].trim();
+      const order = $(el)
+        .find('a[href*="orderID="]')
+        ?.attr('href')
+        ?.replace(/.*orderID=([^&#]+).*/, '$1');
       if (order) {
         orders.push(order);
       }
