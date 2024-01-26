@@ -248,7 +248,7 @@ async function updateMonarchTransactions() {
   for (const data of matches) {
     const itemString = data.amazon.items
       .map(item => {
-        return item.title + ' - $' + item.price;
+        return item.title + ' - $' + item.price.toFixed(2);
       })
       .join('\n\n')
       .trim();
