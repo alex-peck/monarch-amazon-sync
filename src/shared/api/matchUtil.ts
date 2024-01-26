@@ -14,16 +14,18 @@ export function matchTransactions(
   override: boolean,
 ): MatchedTransaction[] {
   const orderTransactions = orders.flatMap(order => {
-    return order.transactions.map(transaction => {
-      return {
-        items: transaction.items,
-        refund: transaction.refund,
-        amount: transaction.refund ? transaction.amount : transaction.amount * -1,
-        date: transaction.date,
-        used: false,
-        id: order.id,
-      };
-    });
+    return (
+      order.transactions?.map(transaction => {
+        return {
+          items: transaction.items,
+          refund: transaction.refund,
+          amount: transaction.refund ? transaction.amount : transaction.amount * -1,
+          date: transaction.date,
+          used: false,
+          id: order.id,
+        };
+      }) ?? []
+    );
   });
 
   // find monarch transactions that match amazon orders. don't allow duplicates

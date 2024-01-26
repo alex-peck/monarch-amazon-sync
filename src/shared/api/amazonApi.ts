@@ -14,7 +14,8 @@ export type AmazonInfo = {
 
 export type Order = {
   id: string;
-  transactions: OrderTransaction[];
+  date: string;
+  transactions?: OrderTransaction[];
 };
 
 export type Item = {
@@ -111,9 +112,9 @@ export async function fetchOrders(
 
   const allOrders: Order[] = [];
 
-  const processOrder = async (order: string) => {
+  const processOrder = async (order: Order) => {
     try {
-      const orderData = await fetchOrder(order);
+      const orderData = await fetchOrderTransactions(order);
       if (orderData) {
         allOrders.push(orderData);
       }
@@ -143,16 +144,20 @@ async function processOrders(year: number | undefined, page: number) {
   return orderListFromPage($);
 }
 
-function orderListFromPage($: CheerioAPI): string[] {
-  const orders: string[] = [];
+function orderListFromPage($: CheerioAPI): Order[] {
+  const orders: Order[] = [];
   $('.order-card').each((_, el) => {
     try {
-      const order = $(el)
+      const id = $(el)
         .find('a[href*="orderID="]')
         ?.attr('href')
         ?.replace(/.*orderID=([^&#]+).*/, '$1');
-      if (order) {
-        orders.push(order);
+      if (id) {
+        const date = $(el).find('.order-info .value')?.first().text().trim();
+        orders.push({
+          id,
+          date,
+        });
       }
     } catch (e: unknown) {
       debugLog(e);
@@ -161,17 +166,17 @@ function orderListFromPage($: CheerioAPI): string[] {
   return orders;
 }
 
-async function fetchOrder(order: string): Promise<Order> {
-  await debugLog('Fetching order ' + order);
-  const res = await fetch(ORDER_DETAILS_URL + '?orderID=' + order);
-  await debugLog('Got order response ' + res.status + ' for order ' + order);
+async function fetchOrderTransactions(order: Order): Promise<Order> {
+  await debugLog('Fetching order ' + order.id);
+  const res = await fetch(ORDER_DETAILS_URL + '?orderID=' + order.id);
+  await debugLog('Got order response ' + res.status + ' for order ' + order.id);
   const text = await res.text();
   const $ = load(text);
 
   const items: Item[] = [];
   $('.yohtmlc-item').each((_, el) => {
     const item = $(el).find('.a-link-normal').first()?.text()?.trim();
-    const price = parseFloat($(el).find('.a-color-price').first()?.text()?.trim().replace('$', ''));
+    const price = moneyToNumber($(el).find('.a-color-price').first()?.text());
     if (item) {
       items.push({
         title: item,
@@ -182,6 +187,17 @@ async function fetchOrder(order: string): Promise<Order> {
 
   const transactions: OrderTransaction[] = [];
 
+  const giftCardAmount = moneyToNumber($('#od-subtotals .a-column:contains("Gift Card") + .a-column').text());
+  if (giftCardAmount) {
+    transactions.push({
+      id: order.id,
+      date: order.date,
+      amount: giftCardAmount,
+      refund: false,
+      items,
+    });
+  }
+
   const fullDetails = $('.a-expander-inline-content ').first();
   $(fullDetails)
     .find('.a-row')
@@ -190,9 +206,9 @@ async function fetchOrder(order: string): Promise<Order> {
       if (line.includes('Items shipped')) {
         const dateAndAmount = line.split('shipped:')[1].trim();
         const date = dateAndAmount.split('-')[0].trim();
-        const amount = parseFloat(dateAndAmount.split('-')[1].split('$')[1].trim());
+        const amount = moneyToNumber(dateAndAmount.split('-')[1].split('$')[1]);
         transactions.push({
-          id: order,
+          id: order.id,
           date,
           amount,
           refund: false,
@@ -201,9 +217,9 @@ async function fetchOrder(order: string): Promise<Order> {
       } else if (line.includes('Refund: Completed')) {
         const dateAndAmount = line.split(': Completed')[1].trim();
         const date = dateAndAmount.split('-')[0].trim();
-        const amount = parseFloat(dateAndAmount.split('-')[1].split('$')[1].trim());
+        const amount = moneyToNumber(dateAndAmount.split('-')[1].split('$')[1]);
         transactions.push({
-          id: order,
+          id: order.id,
           date,
           amount,
           refund: true,
@@ -213,7 +229,11 @@ async function fetchOrder(order: string): Promise<Order> {
     });
 
   return {
-    id: order,
+    ...order,
     transactions,
   };
+}
+
+function moneyToNumber(money: string, absoluteValue = true) {
+  return parseFloat(money?.replace(absoluteValue ? /[$\s-]/g : /[$\s]/g, ''));
 }
