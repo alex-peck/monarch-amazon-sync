@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, ToggleSwitch } from 'flowbite-react';
 import progressStorage, { ProgressPhase } from '@root/src/shared/storages/progressStorage';
 import useStorage from '@root/src/shared/hooks/useStorage';
@@ -39,28 +39,32 @@ const Main = () => {
     }
   }, [actionOngoing, progress.complete, progress.phase]);
 
+  const [checkedAmazon, setCheckedAmazon] = useState(false);
+
   // Check if we need to re-authenticate with Amazon
   useEffect(() => {
     if (
-      appData.amazonStatus === AuthStatus.Success &&
-      new Date(appData.lastAmazonAuth).getTime() > Date.now() - 1000 * 60 * 60 * 24
+      (appData.amazonStatus === AuthStatus.Success &&
+        new Date(appData.lastAmazonAuth).getTime() > Date.now() - 1000 * 60 * 60 * 24) ||
+      checkedAmazon
     ) {
       return;
     }
+    setCheckedAmazon(true);
     appStorage.patch({ amazonStatus: AuthStatus.Pending }).then(() => {
       checkAmazonAuth().then(amazon => {
-        if (amazon.success) {
+        if (amazon.status === AuthStatus.Success) {
           appStorage.patch({
             amazonStatus: AuthStatus.Success,
             lastAmazonAuth: Date.now(),
             oldestAmazonYear: amazon.startingYear,
           });
         } else {
-          appStorage.patch({ amazonStatus: AuthStatus.Failure, lastAmazonAuth: Date.now() });
+          appStorage.patch({ amazonStatus: amazon.status });
         }
       });
     });
-  }, [appData.amazonStatus, appData.lastAmazonAuth]);
+  }, [appData.amazonStatus, appData.lastAmazonAuth, checkedAmazon]);
 
   const ready =
     appData.amazonStatus === AuthStatus.Success && appData.monarchStatus === AuthStatus.Success && !actionOngoing;
@@ -84,7 +88,13 @@ const Main = () => {
                 ? ConnectionStatus.Success
                 : ConnectionStatus.Error
           }
-          message={appData.amazonStatus === AuthStatus.Failure ? 'Log in to Amazon and try again.' : undefined}
+          message={
+            appData.amazonStatus === AuthStatus.NotLoggedIn
+              ? 'Log in to Amazon and try again.'
+              : appData.amazonStatus === AuthStatus.Failure
+                ? 'Failed to connect to Amazon. Ensure the extension has been granted access.'
+                : undefined
+          }
         />
         <ConnectionInfo
           name="Monarch connection"

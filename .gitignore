@@ -6,7 +6,8 @@
 
 # build
 /dist
-monarch-amazon-sync.zip
+chrome-monarch-amazon-sync.zip
+firefox-monarch-amazon-sync.zip
 
 # etc
 .DS_Store

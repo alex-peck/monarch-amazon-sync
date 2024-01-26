@@ -4,7 +4,8 @@
   "description": "Browser extension to sync Amazon order data to Monarch transactions.",
   "scripts": {
     "build": "tsc --noEmit && vite build",
-    "build-and-zip": "pnpm build && rm monarch-amazon-sync.zip && zip -r monarch-amazon-sync.zip dist",
+    "build-and-zip": "pnpm build && rm -f chrome-monarch-amazon-sync.zip && cd dist && zip -r ../chrome-monarch-amazon-sync.zip .",
+    "build-and-zip:firefox": "pnpm build:firefox && rm -f firefox-monarch-amazon-sync.zip && cd dist && zip -r ../firefox-monarch-amazon-sync.zip .",
     "build:firefox": "tsc --noEmit && cross-env __FIREFOX__=true vite build",
     "build:watch": "cross-env __DEV__=true vite build -w --mode development",
     "build:firefox:watch": "cross-env __DEV__=true __FIREFOX__=true vite build -w --mode development",

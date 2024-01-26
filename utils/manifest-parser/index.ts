@@ -20,14 +20,17 @@ class ManifestParser {
       scripts: [manifest.background?.service_worker],
       type: 'module',
     };
-    manifestCopy.options_ui = {
-      page: manifest.options_page,
-      browser_style: false,
-    };
+    if (manifest.options_page) {
+      manifestCopy.options_ui = {
+        page: manifest.options_page,
+        browser_style: false,
+      };
+      delete manifestCopy.options_page;
+    }
+
     manifestCopy.content_security_policy = {
       extension_pages: "script-src 'self'; object-src 'self'",
     };
-    delete manifestCopy.options_page;
     return manifestCopy as Manifest;
   }
 }

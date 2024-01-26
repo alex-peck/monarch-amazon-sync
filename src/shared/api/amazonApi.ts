@@ -3,12 +3,13 @@ import { load } from 'cheerio';
 import type { CheerioAPI } from 'cheerio';
 import * as Throttle from 'promise-parallel-throttle';
 import { debugLog } from '../storages/debugStorage';
+import { AuthStatus } from '../storages/appStorage';
 
-const ORDER_PAGES_URL = 'https://www.amazon.com/gp/css/order-history';
+const ORDER_PAGES_URL = 'https://www.amazon.com/gp/css/order-history?disableCsd=no-js';
 const ORDER_DETAILS_URL = 'https://www.amazon.com/gp/your-account/order-details';
 
 export type AmazonInfo = {
-  success: boolean;
+  status: AuthStatus;
   startingYear?: number;
 };
 
@@ -39,12 +40,12 @@ export async function checkAmazonAuth(): Promise<AmazonInfo> {
     const text = await res.text();
     const $ = load(text);
 
-    const signIn = $('#signInSubmit');
+    const signIn = $('h1:contains("Sign in")');
 
     if (signIn.length > 0) {
       await debugLog('Amazon auth failed');
       return {
-        success: false,
+        status: AuthStatus.NotLoggedIn,
       };
     }
 
@@ -61,13 +62,13 @@ export async function checkAmazonAuth(): Promise<AmazonInfo> {
 
     await debugLog('Amazon auth success');
     return {
-      success: true,
+      status: AuthStatus.Success,
       startingYear: lowestYear,
     };
   } catch (e) {
     await debugLog('Amazon auth failed with error: ' + e);
     return {
-      success: false,
+      status: AuthStatus.Failure,
     };
   }
 }
@@ -78,7 +79,7 @@ export async function fetchOrders(
 ): Promise<Order[]> {
   let url = ORDER_PAGES_URL;
   if (year) {
-    url += `?timeFilter=year-${year}`;
+    url += `&timeFilter=year-${year}`;
   }
   await debugLog('Fetching orders from ' + url);
   const res = await fetch(url);
@@ -132,7 +133,7 @@ export async function fetchOrders(
 
 async function processOrders(year: number | undefined, page: number) {
   const index = (page - 1) * 10;
-  let url = ORDER_PAGES_URL + '?startIndex=' + index;
+  let url = ORDER_PAGES_URL + '&startIndex=' + index;
   if (year) {
     url += `&timeFilter=year-${year}`;
   }
