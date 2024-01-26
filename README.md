@@ -11,9 +11,12 @@ This will allow easy categorization of Amazon purchases in Monarch without the n
 
 ## Features
 
-- Checks for new Amazon purchases daily in the background and automatically syncs them to new Monarch transactions. NOTE: sync occurs when your browser is open
-- Backfill past years of Amazon purchases to Monarch transaction notes
-- Handles refunds and multi-item orders.
+- Automatically matches Amazon orders with Monarch transactions based on amounts and dates
+- Populates Monarch transaction notes with a list of item names and per-item prices
+- Handles refunds (adds the same item names to a refund transaction when a refund is made)
+- Supports gift card transactions (will match to existing Monarch transactions, does not create new transactions)
+- Performs a daily sync to pull new Amazon orders and match them to Monarch transactions (requires browser to be open)
+- Supports backfilling past years of Amazon orders to existing Monarch transactions
 
 ## Installation
 
@@ -42,6 +45,7 @@ This will allow easy categorization of Amazon purchases in Monarch without the n
 3. Optionally run in "dry-run" mode to create a CSV of what changes will be made before actually making them.
 
 ## Known limitations
+- The extension does not create new transactions. It only updates the notes of existing transactions.
 - Occasionally Amazon will break up a single order of many items into separate credit card transactions.
 In this case, it is not currently possible to tell which items belong to which transaction.
 To handle this, this extension will always populate all items in an order on every Monarch transaction associated with that Amazon order.
