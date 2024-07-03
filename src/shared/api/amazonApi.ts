@@ -147,7 +147,7 @@ async function processOrders(year: number | undefined, page: number) {
 
 function orderListFromPage($: CheerioAPI): Order[] {
   const orders: Order[] = [];
-  $('.order-card').each((_, el) => {
+  $('.js-order-card').each((_, el) => {
     try {
       const id = $(el)
         .find('a[href*="orderID="]')
