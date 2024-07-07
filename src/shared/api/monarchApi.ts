@@ -3,6 +3,7 @@ export type Transaction = {
   amount: number;
   date: string;
   notes: string;
+  merchant: string;
 };
 
 export async function updateMonarchTransaction(authKey: string, id: string, note: string) {
@@ -69,6 +70,9 @@ export async function getTransactions(
             pending
             date
             notes
+            merchant {
+              name
+            }
           }
         }
       }
@@ -76,7 +80,14 @@ export async function getTransactions(
   };
 
   const result = await graphQLRequest(authKey, body);
-  return result.data.allTransactions.results;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return result.data.allTransactions.results.map((transaction: any) => ({
+    id: transaction.id,
+    amount: transaction.amount,
+    date: transaction.date,
+    notes: transaction.notes,
+    merchant: transaction.merchant.name,
+  }));
 }
 
 async function graphQLRequest(authKey: string, body: unknown) {

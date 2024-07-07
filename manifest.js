@@ -13,6 +13,8 @@ const manifest = {
   host_permissions: [
     'https://amazon.com/*',
     'https://www.amazon.com/*',
+    'https://walmart.com/*',
+    'https://www.walmart.com/*',
     'https://app.monarchmoney.com/*',
     'https://api.monarchmoney.com/*',
   ],

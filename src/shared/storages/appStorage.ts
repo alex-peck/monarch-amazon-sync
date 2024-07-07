@@ -15,9 +15,9 @@ export enum AuthStatus {
 
 export enum FailureReason {
   Unknown = 'unknown',
-  NoAmazonOrders = 'noAmazonOrders',
-  NoAmazonAuth = 'noAmazonAuth',
-  AmazonError = 'amazonError',
+  NoProviderOrders = 'noAmazonOrders',
+  NoProviderAuth = 'noProviderAuth',
+  ProviderError = 'amazonError',
   NoMonarchAuth = 'noMonarchAuth',
   MonarchError = 'monarchError',
   NoMonarchTransactions = 'noMonarchTransactions',
@@ -25,11 +25,11 @@ export enum FailureReason {
 
 export const mapFailureReasonToMessage = (reason: FailureReason | undefined): string => {
   switch (reason) {
-    case FailureReason.NoAmazonOrders:
+    case FailureReason.NoProviderOrders:
       return 'No Amazon orders found';
-    case FailureReason.NoAmazonAuth:
+    case FailureReason.NoProviderAuth:
       return 'Amazon authorization failed';
-    case FailureReason.AmazonError:
+    case FailureReason.ProviderError:
       return 'An error occurred while fetching Amazon orders';
     case FailureReason.NoMonarchAuth:
       return 'Monarch authorization failed';
@@ -52,10 +52,13 @@ export type LastSync = {
   dryRun?: boolean;
 };
 
-type Options = {
+export type Options = {
   overrideTransactions: boolean;
   amazonMerchant: string;
+  walmartMerchant: string;
   syncEnabled: boolean;
+  transactionMatchingWindowInDays: number;
+  maxPages: number | undefined;
 };
 
 type State = {
@@ -84,7 +87,10 @@ const appStorage = createStorage<State>(
     options: {
       overrideTransactions: false,
       amazonMerchant: 'Amazon',
+      walmartMerchant: 'Walmart',
       syncEnabled: false,
+      transactionMatchingWindowInDays: 7,
+      maxPages: Infinity,
     },
   },
   {

@@ -1,3 +1,5 @@
+import { Options } from '../storages/appStorage';
+import { debugLog } from '../storages/debugStorage';
 import { Order, OrderTransaction } from './amazonApi';
 import { Transaction } from './monarchApi';
 
@@ -6,17 +8,16 @@ export type MatchedTransaction = {
   amazon: OrderTransaction;
 };
 
-const DAYS_7 = 1000 * 60 * 60 * 24 * 7;
-
 export function matchTransactions(
   transactions: Transaction[],
   orders: Order[],
-  override: boolean,
+  options: Options,
 ): MatchedTransaction[] {
   const orderTransactions = orders.flatMap(order => {
     return (
       order.transactions?.map(transaction => {
         return {
+          provider: order.provider,
           items: transaction.items,
           refund: transaction.refund,
           amount: transaction.refund ? transaction.amount : transaction.amount * -1,
@@ -28,49 +29,52 @@ export function matchTransactions(
     );
   });
 
-  // find monarch transactions that match amazon orders. don't allow duplicates
-  const monarchAmazonTransactions = [];
+  const days = options.transactionMatchingWindowInDays * 24 * 60 * 60 * 1000;
+  debugLog(`Matching transactions within ${options.transactionMatchingWindowInDays} days`);
+
+  // find monarch transactions that match provider orders. don't allow duplicates
+  const monarchProviderTransactions = [];
   for (const monarchTransaction of transactions) {
     const monarchDate = new Date(monarchTransaction.date);
-    let closestAmazon = null;
+    let closestProvider = null;
     let closestDistance = null;
-    for (const amazonTransaction of orderTransactions) {
+    for (const orderTransaction of orderTransactions) {
       // we already matched this transaction
-      if (amazonTransaction.used) continue;
+      if (orderTransaction.used) continue;
 
-      const orderDate = new Date(amazonTransaction.date);
+      const orderDate = new Date(orderTransaction.date);
       if (isNaN(orderDate.getTime())) continue;
 
-      // look for Monarch transactions that are within 7 days of the Amazon transaction
-      const lower = orderDate.getTime() - DAYS_7;
-      const upper = orderDate.getTime() + DAYS_7;
+      // look for Monarch transactions that are within X days of the provider transaction
+      const lower = orderDate.getTime() - days;
+      const upper = orderDate.getTime() + days;
       const matchesDate = monarchDate.getTime() >= lower && monarchDate.getTime() <= upper;
 
       // get the closest transaction
       const distance = Math.abs(monarchDate.getTime() - orderDate.getTime());
       if (
-        monarchTransaction.amount === amazonTransaction.amount &&
+        monarchTransaction.amount === orderTransaction.amount &&
         matchesDate &&
         (closestDistance === null || distance < closestDistance)
       ) {
-        closestAmazon = amazonTransaction;
+        closestProvider = orderTransaction;
         closestDistance = distance;
       }
     }
 
-    if (closestAmazon) {
+    if (closestProvider) {
       // Only match if the transaction doesn't have notes
-      if (override || !monarchTransaction.notes) {
-        monarchAmazonTransactions.push({
+      if (options.overrideTransactions || !monarchTransaction.notes) {
+        monarchProviderTransactions.push({
           monarch: monarchTransaction,
-          amazon: closestAmazon,
+          amazon: closestProvider,
         });
       }
-      closestAmazon.used = true;
+      closestProvider.used = true;
     }
   }
 
-  return monarchAmazonTransactions
+  return monarchProviderTransactions
     .map(transaction => {
       return {
         amazon: transaction.amazon,

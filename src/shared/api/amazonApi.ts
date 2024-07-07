@@ -4,6 +4,7 @@ import type { CheerioAPI } from 'cheerio';
 import * as Throttle from 'promise-parallel-throttle';
 import { debugLog } from '../storages/debugStorage';
 import { AuthStatus } from '../storages/appStorage';
+import { Provider } from '@root/src/pages/background';
 
 const ORDER_PAGES_URL = 'https://www.amazon.com/gp/css/order-history?disableCsd=no-js';
 const ORDER_DETAILS_URL = 'https://www.amazon.com/gp/your-account/order-details';
@@ -14,17 +15,23 @@ export type AmazonInfo = {
 };
 
 export type Order = {
+  provider: Provider;
   id: string;
   date: string;
   transactions?: OrderTransaction[];
+  walmartStorePurchase?: boolean;
 };
 
 export type Item = {
+  provider: Provider;
+  orderId: string;
   title: string;
   price: number;
+  refunded: boolean;
 };
 
 export type OrderTransaction = {
+  provider: Provider;
   id: string;
   amount: number;
   date: string;
@@ -75,6 +82,7 @@ export async function checkAmazonAuth(): Promise<AmazonInfo> {
 
 export async function fetchOrders(
   year: number | undefined,
+  maxPages: number | undefined,
   onProgress: (progress: ProgressState) => void,
 ): Promise<Order[]> {
   let url = ORDER_PAGES_URL;
@@ -97,6 +105,10 @@ export async function fetchOrders(
       }
     }
   });
+
+  if (maxPages && maxPages < endPage) {
+    endPage = maxPages;
+  }
 
   onProgress({ phase: ProgressPhase.AmazonPageScan, total: endPage, complete: 0 });
 
@@ -158,6 +170,7 @@ function orderListFromPage($: CheerioAPI): Order[] {
         orders.push({
           id,
           date,
+          provider: Provider.Amazon,
         });
       }
     } catch (e: unknown) {
@@ -180,8 +193,11 @@ async function fetchOrderTransactions(order: Order): Promise<Order> {
     const price = moneyToNumber($(el).find('.a-color-price').first()?.text());
     if (item) {
       items.push({
+        provider: Provider.Amazon,
+        orderId: order.id,
         title: item,
         price,
+        refunded: false, // Unknown actually
       });
     }
   });
@@ -192,6 +208,7 @@ async function fetchOrderTransactions(order: Order): Promise<Order> {
   if (giftCardAmount) {
     transactions.push({
       id: order.id,
+      provider: Provider.Amazon,
       date: order.date,
       amount: giftCardAmount,
       refund: false,
@@ -204,30 +221,49 @@ async function fetchOrderTransactions(order: Order): Promise<Order> {
     .find('.a-row')
     .each((_, el) => {
       const line = $(el).text().trim().replaceAll('\n', '');
+      let dateAndAmount;
+      let date;
+      let amount;
+      let refund;
+
       if (line.includes('Items shipped')) {
-        const dateAndAmount = line.split('shipped:')[1].trim();
-        const date = dateAndAmount.split('-')[0].trim();
-        const amount = moneyToNumber(dateAndAmount.split('-')[1].split('$')[1]);
+        refund = false;
+        dateAndAmount = line.split('shipped:')[1].trim();
+        date = dateAndAmount.split('-')[0].trim();
+        amount = moneyToNumber(dateAndAmount.split('-')[1].split('$')[1]);
         transactions.push({
           id: order.id,
+          provider: Provider.Amazon,
           date,
           amount,
-          refund: false,
+          refund,
           items,
         });
       } else if (line.includes('Refund: Completed')) {
-        const dateAndAmount = line.split(': Completed')[1].trim();
-        const date = dateAndAmount.split('-')[0].trim();
-        const amount = moneyToNumber(dateAndAmount.split('-')[1].split('$')[1]);
+        refund = true;
+        dateAndAmount = line.split(': Completed')[1].trim();
+        date = dateAndAmount.split('-')[0].trim();
+        amount = moneyToNumber(dateAndAmount.split('-')[1].split('$')[1]);
         transactions.push({
           id: order.id,
+          provider: Provider.Amazon,
           date,
           amount,
-          refund: true,
+          refund,
           items,
         });
+      } else {
+        const err = `Unknown Amazon transaction line: ${line}`;
+        debugLog(err);
+        throw new Error(err);
       }
+
+      debugLog(
+        `Found transaction for order ${order.id} with date ${date}, amount ${amount}, refund ${refund}, and ${items.length} items`,
+      );
     });
+
+  debugLog('Found ' + transactions.length + ' transactions for order ' + order.id);
 
   return {
     ...order,

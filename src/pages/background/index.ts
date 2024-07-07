@@ -1,13 +1,20 @@
-import { Order, fetchOrders } from '@root/src/shared/api/amazonApi';
+import { Order } from '@root/src/shared/api/amazonApi';
+import * as amazonApi from '@root/src/shared/api/amazonApi';
+import * as walmartApi from '@root/src/shared/api/walmartApi';
 import reloadOnUpdate from 'virtual:reload-on-update-in-background-script';
 import 'webextension-polyfill';
 import { Transaction, getTransactions, updateMonarchTransaction } from '@root/src/shared/api/monarchApi';
-import progressStorage, { ProgressPhase } from '@root/src/shared/storages/progressStorage';
+import progressStorage, { ProgressPhase, ProgressState } from '@root/src/shared/storages/progressStorage';
 import transactionStorage, { TransactionStatus } from '@root/src/shared/storages/transactionStorage';
 import { matchTransactions } from '@root/src/shared/api/matchUtil';
 import appStorage, { AuthStatus, FailureReason, LastSync } from '@root/src/shared/storages/appStorage';
 import { Action } from '@root/src/shared/types';
 import debugStorage, { debugLog } from '@root/src/shared/storages/debugStorage';
+
+export enum Provider {
+  Amazon = 'amazon',
+  Walmart = 'walmart',
+}
 
 reloadOnUpdate('pages/background');
 
@@ -152,23 +159,45 @@ async function downloadAndStoreTransactions(yearString?: string, dryRun: boolean
     return false;
   }
 
+  // START: support for multiple providers
   await progressStorage.set({ phase: ProgressPhase.AmazonPageScan, total: 0, complete: 0 });
 
-  let orders: Order[];
-  try {
-    await debugLog('Fetching Amazon orders');
-    orders = await fetchOrders(year, async progress => {
-      await progressStorage.patch(progress);
-    });
-  } catch (e) {
-    await debugLog(e);
-    await logSyncComplete({ success: false, failureReason: FailureReason.AmazonError });
-    return false;
+  let orders: Order[] = [];
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const apiMapping: { [key in Provider]: any } = {
+    [Provider.Walmart]: walmartApi,
+    [Provider.Amazon]: amazonApi,
+  };
+
+  for (const orderType in apiMapping) {
+    try {
+      await debugLog(`Fetching ${orderType} orders`);
+
+      const providerApi = apiMapping[orderType as Provider];
+
+      const providerOrders: Order[] = await providerApi.fetchOrders(
+        year,
+        appData.options.maxPages,
+        async (progress: Partial<ProgressState>) => {
+          await progressStorage.patch(progress);
+        },
+      );
+
+      if (providerOrders && providerOrders.length > 0) {
+        orders = orders.concat(providerOrders);
+      }
+    } catch (e) {
+      await debugLog(e);
+      await logSyncComplete({ success: false, failureReason: FailureReason.ProviderError });
+      return false;
+    }
   }
+  // END: support for multiple providers
 
   if (!orders || orders.length === 0) {
-    await debugLog('No Amazon orders found');
-    await logSyncComplete({ success: false, failureReason: FailureReason.NoAmazonOrders });
+    await debugLog('No orders found');
+    await logSyncComplete({ success: false, failureReason: FailureReason.NoProviderOrders });
     return false;
   }
   await transactionStorage.patch({
@@ -190,17 +219,43 @@ async function downloadAndStoreTransactions(yearString?: string, dryRun: boolean
     endDate.setDate(startDate.getDate() + 8);
   }
 
-  let monarchTransactions: Transaction[];
-  try {
-    await debugLog('Fetching Monarch transactions');
-    monarchTransactions = await getTransactions(appData.monarchKey, appData.options.amazonMerchant, startDate, endDate);
-    if (!monarchTransactions || monarchTransactions.length === 0) {
-      await logSyncComplete({ success: false, failureReason: FailureReason.NoMonarchTransactions });
+  // START: support for multiple providers
+  let monarchTransactions: Transaction[] = [];
+
+  const merchantMapping: { [key in Provider]: string } = {
+    [Provider.Walmart]: appData.options.walmartMerchant,
+    [Provider.Amazon]: appData.options.amazonMerchant,
+  };
+
+  for (const orderType in merchantMapping) {
+    try {
+      await debugLog(`Fetching Monarch transactions for ${orderType}`);
+
+      const providerTransactions: Transaction[] = await getTransactions(
+        appData.monarchKey,
+        merchantMapping[orderType as Provider],
+        startDate,
+        endDate,
+      );
+
+      if (providerTransactions && providerTransactions.length > 0) {
+        monarchTransactions = monarchTransactions.concat(providerTransactions);
+      }
+
+      debugLog(`Found ${providerTransactions.length} transactions for ${orderType}`);
+      console.log(providerTransactions);
+    } catch (ex) {
+      await debugLog(ex);
+      await logSyncComplete({ success: false, failureReason: FailureReason.MonarchError });
       return false;
     }
-  } catch (ex) {
-    await debugLog(ex);
-    await logSyncComplete({ success: false, failureReason: FailureReason.MonarchError });
+  }
+  // END: support for multiple providers
+
+  debugLog(`Found ${monarchTransactions.length} transactions`);
+
+  if (!monarchTransactions || monarchTransactions.length === 0) {
+    await logSyncComplete({ success: false, failureReason: FailureReason.NoMonarchTransactions });
     return false;
   }
 
@@ -210,7 +265,7 @@ async function downloadAndStoreTransactions(yearString?: string, dryRun: boolean
   });
 
   if (dryRun) {
-    const matches = matchTransactions(monarchTransactions, orders, appData.options.overrideTransactions);
+    const matches = matchTransactions(monarchTransactions, orders, appData.options);
     await logSyncComplete({
       success: true,
       dryRun: true,
@@ -240,16 +295,12 @@ async function updateMonarchTransactions() {
     return false;
   }
 
-  const matches = matchTransactions(
-    transactions.transactions,
-    transactions.orders,
-    appData.options.overrideTransactions,
-  );
+  const matches = matchTransactions(transactions.transactions, transactions.orders, appData.options);
 
   for (const data of matches) {
     const itemString = data.amazon.items
       .map(item => {
-        return item.title + ' - $' + item.price.toFixed(2);
+        return `$${item.price.toFixed(2)} - ${item.orderId} - ${item.title}`;
       })
       .join('\n\n')
       .trim();
