@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, ToggleSwitch } from 'flowbite-react';
 import progressStorage, { ProgressPhase } from '@root/src/shared/storages/progressStorage';
 import useStorage from '@root/src/shared/hooks/useStorage';
-import { checkAmazonAuth } from '@root/src/shared/api/amazonApi';
+import { checkAuth } from '@root/src/shared/api/amazonApi';
 import appStorage, { AuthStatus } from '@root/src/shared/storages/appStorage';
 import ProgressIndicator from './components/ProgressIndicator';
 import withErrorBoundary from '@root/src/shared/hoc/withErrorBoundary';
@@ -52,7 +52,7 @@ const Main = () => {
     }
     setCheckedAmazon(true);
     appStorage.patch({ amazonStatus: AuthStatus.Pending }).then(() => {
-      checkAmazonAuth().then(amazon => {
+      checkAuth().then(amazon => {
         if (amazon.status === AuthStatus.Success) {
           appStorage.patch({
             amazonStatus: AuthStatus.Success,

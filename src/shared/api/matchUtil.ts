@@ -1,18 +1,24 @@
 import { Options } from '../storages/appStorage';
 import { debugLog } from '../storages/debugStorage';
-import { Order, OrderTransaction } from '../types';
-import { Transaction } from './monarchApi';
+import { Order, OrderTransaction, MonarchTransaction } from '../types';
 
 export type MatchedTransaction = {
-  monarch: Transaction;
+  monarch: MonarchTransaction;
   amazon: OrderTransaction;
 };
 
 export function matchTransactions(
-  transactions: Transaction[],
+  transactions: MonarchTransaction[],
   orders: Order[],
   options: Options,
 ): MatchedTransaction[] {
+  const days = options.transactionMatchingWindowInDays * 24 * 60 * 60 * 1000;
+  debugLog(
+    `Matching ${orders.length} merchant orders to ${transactions.length} Monarch transactions within ${options.transactionMatchingWindowInDays} days`,
+  );
+  console.log(transactions);
+  console.log(orders);
+
   const orderTransactions = orders.flatMap(order => {
     return (
       order.transactions?.map(transaction => {
@@ -28,9 +34,6 @@ export function matchTransactions(
       }) ?? []
     );
   });
-
-  const days = options.transactionMatchingWindowInDays * 24 * 60 * 60 * 1000;
-  debugLog(`Matching transactions within ${options.transactionMatchingWindowInDays} days`);
 
   // find monarch transactions that match provider orders. don't allow duplicates
   const monarchProviderTransactions = [];

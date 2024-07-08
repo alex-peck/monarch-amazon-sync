@@ -1,10 +1,4 @@
-export type Transaction = {
-  id: string;
-  amount: number;
-  date: string;
-  notes: string;
-  merchant: string;
-};
+import { MonarchTransaction } from '../types';
 
 export async function updateMonarchTransaction(authKey: string, id: string, note: string) {
   const body = {
@@ -45,7 +39,7 @@ export async function getTransactions(
   merchant: string,
   startDate?: Date,
   endDate?: Date,
-): Promise<Transaction[]> {
+): Promise<MonarchTransaction[]> {
   const body = {
     operationName: 'Web_GetTransactionsList',
     variables: {

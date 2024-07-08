@@ -30,6 +30,14 @@ export function Options() {
     await appStorage.patch({ amazonStatus: AuthStatus.NotLoggedIn });
   }, []);
 
+  const resetCostcoStatus = useCallback(async () => {
+    await appStorage.patch({ costcoStatus: AuthStatus.NotLoggedIn, costcoToken: undefined });
+  }, []);
+
+  const resetWalmartStatus = useCallback(async () => {
+    await appStorage.patch({ walmartStatus: AuthStatus.NotLoggedIn });
+  }, []);
+
   useEffect(() => {
     if (!options) {
       appStorage.patch({
@@ -37,6 +45,7 @@ export function Options() {
           overrideTransactions: false,
           syncEnabled: false,
           amazonMerchant: 'Amazon',
+          costcoMerchant: 'Costco',
           walmartMerchant: 'Walmart',
           transactionMatchingWindowInDays: 7,
           maxPages: Infinity,
@@ -63,6 +72,21 @@ export function Options() {
           placeholder="Amazon merchant"
           onChange={element => {
             appStorage.patch({ options: { ...options, amazonMerchant: element.target.value } });
+          }}
+        />
+      </div>
+      <div className="flex flex-col mb-2">
+        <div className="mb-1 block">
+          <Label htmlFor="costcoMerchant" value="What merchant is Costco in Monarch?" />
+        </div>
+        <TextInput
+          defaultValue={options?.walmartMerchant}
+          className="pb-3"
+          type="text"
+          id="costcoMerchant"
+          placeholder="Costco merchant"
+          onChange={element => {
+            appStorage.patch({ options: { ...options, costcoMerchant: element.target.value } });
           }}
         />
       </div>
@@ -158,7 +182,7 @@ export function Options() {
 
       <div className="mt-2">
         <button className="btn btn-primary" onClick={resetMonarchStatus}>
-          Reset Monarch connection status
+          Reset Monarch connection status and token
         </button>
         <span className="mt-1 text-gray-500 text-xs font-normal">
           If GraphQL requests to Monarch API fail, the extension cached an expired token. You must log out from Monarch,
@@ -168,6 +192,16 @@ export function Options() {
       <div className="mt-2">
         <button className="btn btn-primary" onClick={resetAmazonStatus}>
           Reset Amazon connection status
+        </button>
+      </div>
+      <div className="mt-2">
+        <button className="btn btn-primary" onClick={resetCostcoStatus}>
+          Reset Costco connection status and token
+        </button>
+      </div>
+      <div className="mt-2">
+        <button className="btn btn-primary" onClick={resetWalmartStatus}>
+          Reset Walmart connection status
         </button>
       </div>
     </div>

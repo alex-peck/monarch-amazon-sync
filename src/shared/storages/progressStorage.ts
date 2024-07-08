@@ -4,6 +4,8 @@ export enum ProgressPhase {
   Idle = 'idle',
   AmazonPageScan = 'amazon_page_scan',
   AmazonOrderDownload = 'amazon_order_download',
+  CostcoPageScan = 'costco_page_scan',
+  CostcoOrderDownload = 'costco_order_download',
   WalmartPageScan = 'walmart_page_scan',
   WalmartOrderDownload = 'walmart_order_download',
   MonarchDownload = 'monarch_download',

@@ -9,7 +9,7 @@ import { Item, Order, OrderTransaction, Provider, ProviderInfo } from '../types'
 const ORDER_PAGES_URL = 'https://www.amazon.com/gp/css/order-history?disableCsd=no-js';
 const ORDER_DETAILS_URL = 'https://www.amazon.com/gp/your-account/order-details';
 
-export async function checkAmazonAuth(): Promise<ProviderInfo> {
+export async function checkAuth(): Promise<ProviderInfo> {
   try {
     debugLog('Checking Amazon auth');
     const res = await fetch(ORDER_PAGES_URL);
@@ -113,7 +113,7 @@ export async function fetchOrders(
   return allOrders;
 }
 
-async function processOrders(year: number | undefined, page: number) {
+async function processOrders(year: number | undefined, page: number): Promise<Order[]> {
   const index = (page - 1) * 10;
   let url = ORDER_PAGES_URL + '&startIndex=' + index;
   if (year) {
@@ -233,7 +233,7 @@ async function fetchOrderTransactions(order: Order): Promise<Order> {
       );
     });
 
-  debugLog('Found ' + transactions.length + ' transactions for order ' + order.id);
+  await debugLog('Found ' + transactions.length + ' transactions for order ' + order.id);
 
   return {
     ...order,

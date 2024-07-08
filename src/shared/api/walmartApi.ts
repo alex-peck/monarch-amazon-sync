@@ -14,9 +14,9 @@ export type WalmartInfo = {
   startingYear?: number;
 };
 
-export async function checkWalmartAuth(): Promise<WalmartInfo> {
+export async function checkAuth(): Promise<WalmartInfo> {
   try {
-    debugLog('Checking Walmart auth');
+    await debugLog('Checking Walmart auth');
     const res = await fetch(ORDER_PAGES_URL);
     await debugLog('Got Walmart auth response' + res.status);
     const text = await res.text();
@@ -111,7 +111,7 @@ export async function fetchOrders(
   return allOrders;
 }
 
-async function processOrders(year: number | undefined, page: number) {
+async function processOrders(year: number | undefined, page: number): Promise<Order[]> {
   const index = (page - 1) * 10;
   let url = ORDER_PAGES_URL + '?startIndex=' + index;
   if (year) {
@@ -232,7 +232,7 @@ async function fetchOrderTransactions(order: Order): Promise<Order> {
     );
   });
 
-  debugLog('Found ' + transactions.length + ' transactions for order ' + order.id);
+  await debugLog('Found ' + transactions.length + ' transactions for order ' + order.id);
 
   return {
     ...order,

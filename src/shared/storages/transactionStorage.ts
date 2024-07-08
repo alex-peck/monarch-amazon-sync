@@ -1,6 +1,5 @@
 import { createStorage, StorageType } from '@src/shared/storages/base';
-import { Order } from '../types';
-import { Transaction } from '../api/monarchApi';
+import { Order, MonarchTransaction } from '../types';
 
 export enum TransactionStatus {
   Pending = 'pending',
@@ -11,7 +10,7 @@ export enum TransactionStatus {
 type State = {
   result: TransactionStatus;
   orders: Order[];
-  transactions: Transaction[];
+  transactions: MonarchTransaction[];
 };
 
 const transactionStorage = createStorage<State>(

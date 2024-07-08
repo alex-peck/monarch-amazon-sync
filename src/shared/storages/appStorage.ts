@@ -55,6 +55,7 @@ export type LastSync = {
 export type Options = {
   overrideTransactions: boolean;
   amazonMerchant: string;
+  costcoMerchant: string;
   walmartMerchant: string;
   syncEnabled: boolean;
   transactionMatchingWindowInDays: number;
@@ -66,6 +67,11 @@ type State = {
   oldestAmazonYear: number | undefined;
   amazonStatus: AuthStatus;
   lastAmazonAuth: number;
+  costcoStatus: AuthStatus;
+  lastCostcoAuth: number;
+  costcoToken?: string;
+  walmartStatus: AuthStatus;
+  lastWalmartAuth: number;
   monarchKey?: string;
   monarchStatus: AuthStatus;
   lastMonarchAuth: number;
@@ -80,6 +86,11 @@ const appStorage = createStorage<State>(
     oldestAmazonYear: undefined,
     amazonStatus: AuthStatus.NotLoggedIn,
     lastAmazonAuth: 0,
+    costcoStatus: AuthStatus.NotLoggedIn,
+    lastCostcoAuth: 0,
+    costcoToken: undefined,
+    walmartStatus: AuthStatus.NotLoggedIn,
+    lastWalmartAuth: 0,
     monarchKey: undefined,
     monarchStatus: AuthStatus.NotLoggedIn,
     lastMonarchAuth: 0,
@@ -87,6 +98,7 @@ const appStorage = createStorage<State>(
     options: {
       overrideTransactions: false,
       amazonMerchant: 'Amazon',
+      costcoMerchant: 'Costco',
       walmartMerchant: 'Walmart',
       syncEnabled: false,
       transactionMatchingWindowInDays: 7,

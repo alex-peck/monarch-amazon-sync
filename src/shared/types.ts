@@ -13,6 +13,7 @@ export type ProviderInfo = {
 export enum Provider {
   Amazon = 'amazon',
   Walmart = 'walmart',
+  Costco = 'costco',
 }
 
 export type Order = {
@@ -38,4 +39,12 @@ export type OrderTransaction = {
   date: string;
   refund: boolean;
   items: Item[];
+};
+
+export type MonarchTransaction = {
+  id: string;
+  amount: number;
+  date: string;
+  notes: string;
+  merchant: string;
 };

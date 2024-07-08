@@ -69,6 +69,7 @@
     "tslib": "2.6.2",
     "typescript": "5.2.2",
     "vite": "5.0.0",
+    "vite-plugin-static-copy": "^1.0.6",
     "vitest": "^0.34.6",
     "ws": "8.14.2"
   },
