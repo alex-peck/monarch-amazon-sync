@@ -1,5 +1,5 @@
 import { createStorage, StorageType } from '@src/shared/storages/base';
-import { Order } from '../api/amazonApi';
+import { Order } from '../types';
 import { Transaction } from '../api/monarchApi';
 
 export enum TransactionStatus {

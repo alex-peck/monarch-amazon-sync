@@ -4,8 +4,7 @@ import type { CheerioAPI } from 'cheerio';
 import * as Throttle from 'promise-parallel-throttle';
 import { debugLog } from '../storages/debugStorage';
 import { AuthStatus } from '../storages/appStorage';
-import { Order, Item, OrderTransaction } from './amazonApi';
-import { Provider } from '@root/src/pages/background';
+import { Order, Provider, Item, OrderTransaction } from '../types';
 
 const ORDER_PAGES_URL = 'https://www.walmart.com/orders';
 const ORDER_DETAILS_URL = 'https://www.walmart.com/orders/{orderID}?storePurchase={storePurchase}';

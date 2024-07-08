@@ -1,6 +1,6 @@
 import { Options } from '../storages/appStorage';
 import { debugLog } from '../storages/debugStorage';
-import { Order, OrderTransaction } from './amazonApi';
+import { Order, OrderTransaction } from '../types';
 import { Transaction } from './monarchApi';
 
 export type MatchedTransaction = {

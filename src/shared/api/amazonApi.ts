@@ -4,42 +4,12 @@ import type { CheerioAPI } from 'cheerio';
 import * as Throttle from 'promise-parallel-throttle';
 import { debugLog } from '../storages/debugStorage';
 import { AuthStatus } from '../storages/appStorage';
-import { Provider } from '@root/src/pages/background';
+import { Item, Order, OrderTransaction, Provider, ProviderInfo } from '../types';
 
 const ORDER_PAGES_URL = 'https://www.amazon.com/gp/css/order-history?disableCsd=no-js';
 const ORDER_DETAILS_URL = 'https://www.amazon.com/gp/your-account/order-details';
 
-export type AmazonInfo = {
-  status: AuthStatus;
-  startingYear?: number;
-};
-
-export type Order = {
-  provider: Provider;
-  id: string;
-  date: string;
-  transactions?: OrderTransaction[];
-  walmartStorePurchase?: boolean;
-};
-
-export type Item = {
-  provider: Provider;
-  orderId: string;
-  title: string;
-  price: number;
-  refunded: boolean;
-};
-
-export type OrderTransaction = {
-  provider: Provider;
-  id: string;
-  amount: number;
-  date: string;
-  refund: boolean;
-  items: Item[];
-};
-
-export async function checkAmazonAuth(): Promise<AmazonInfo> {
+export async function checkAmazonAuth(): Promise<ProviderInfo> {
   try {
     debugLog('Checking Amazon auth');
     const res = await fetch(ORDER_PAGES_URL);

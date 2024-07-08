@@ -1,4 +1,3 @@
-import { Order } from '@root/src/shared/api/amazonApi';
 import * as amazonApi from '@root/src/shared/api/amazonApi';
 import * as walmartApi from '@root/src/shared/api/walmartApi';
 import reloadOnUpdate from 'virtual:reload-on-update-in-background-script';
@@ -8,13 +7,8 @@ import progressStorage, { ProgressPhase, ProgressState } from '@root/src/shared/
 import transactionStorage, { TransactionStatus } from '@root/src/shared/storages/transactionStorage';
 import { matchTransactions } from '@root/src/shared/api/matchUtil';
 import appStorage, { AuthStatus, FailureReason, LastSync } from '@root/src/shared/storages/appStorage';
-import { Action } from '@root/src/shared/types';
+import { Action, Order, Provider } from '@root/src/shared/types';
 import debugStorage, { debugLog } from '@root/src/shared/storages/debugStorage';
-
-export enum Provider {
-  Amazon = 'amazon',
-  Walmart = 'walmart',
-}
 
 reloadOnUpdate('pages/background');
 
