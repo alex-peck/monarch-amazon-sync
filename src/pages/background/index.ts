@@ -1,6 +1,6 @@
 import * as amazonApi from '@root/src/shared/api/amazonApi';
-import * as costcoApi from '@root/src/shared/api/costcoApi';
-import * as walmartApi from '@root/src/shared/api/walmartApi';
+import * as costcoApi from '@root/src/shared/api/costcoApi'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import * as walmartApi from '@root/src/shared/api/walmartApi'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import reloadOnUpdate from 'virtual:reload-on-update-in-background-script';
 import 'webextension-polyfill';
 import { getTransactions, updateMonarchTransaction } from '@root/src/shared/api/monarchApi';
@@ -182,16 +182,26 @@ async function downloadAndStoreTransactions(yearString?: string, dryRun: boolean
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const apiMapping: { [key in Provider]: any } = {
-    [Provider.Costco]: costcoApi,
-    [Provider.Walmart]: walmartApi,
+    [Provider.Costco]: null,
+    [Provider.Walmart]: null,
     [Provider.Amazon]: amazonApi,
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const merchantMapping: { [key in Provider]: any } = {
+    [Provider.Costco]: null,
+    [Provider.Walmart]: null,
+    [Provider.Amazon]: appData.options.amazonMerchant,
+  };
+
   for (const orderType in apiMapping) {
+    const providerApi = apiMapping[orderType as Provider];
+    if (providerApi === null) {
+      continue;
+    }
+
     try {
       await debugLog(`Fetching ${orderType} orders`);
-
-      const providerApi = apiMapping[orderType as Provider];
 
       const providerOrders: Order[] = await providerApi.fetchOrders(
         year,
@@ -241,19 +251,18 @@ async function downloadAndStoreTransactions(yearString?: string, dryRun: boolean
   // START: support for multiple providers
   let monarchTransactions: MonarchTransaction[] = [];
 
-  const merchantMapping: { [key in Provider]: string } = {
-    [Provider.Costco]: appData.options.costcoMerchant,
-    [Provider.Walmart]: appData.options.walmartMerchant,
-    [Provider.Amazon]: appData.options.amazonMerchant,
-  };
-
   for (const orderType in merchantMapping) {
+    const merchant = merchantMapping[orderType as Provider];
+    if (merchant === null) {
+      continue;
+    }
+
     try {
       await debugLog(`Fetching Monarch transactions for ${orderType}`);
 
       const providerTransactions: MonarchTransaction[] = await getTransactions(
         appData.monarchKey,
-        merchantMapping[orderType as Provider],
+        merchant,
         startDate,
         endDate,
       );
