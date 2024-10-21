@@ -9,6 +9,7 @@ import { Item, Order, OrderTransaction, Provider, ProviderInfo } from '../types'
 const ORDER_PAGES_URL = 'https://www.amazon.com/gp/css/order-history?disableCsd=no-js';
 const ORDER_DETAILS_URL = 'https://www.amazon.com/gp/your-account/order-details';
 const ORDER_INVOICE_URL = 'https://www.amazon.com/gp/css/summary/print.html';
+const ORDER_REFUND_URL = 'https://www.amazon.com/spr/returns/cart?_encoding=UTF8&orderId=';
 
 export async function checkAuth(): Promise<ProviderInfo> {
   try {
@@ -228,6 +229,50 @@ async function fetchOrderTransactions(order: Order): Promise<Order> {
         );
       });
     }
+  }
+
+  const refundTotalSpan = $('span:contains("Refund Total")');
+  if (refundTotalSpan.length > 0) {
+    const refundUrl = ORDER_REFUND_URL + order.id;
+    const refundRes = await fetch(refundUrl);
+    await debugLog(`${prefix} Got refund response ${refundRes.status} for order ${order.id}`);
+    const refundText = await refundRes.text();
+    const refund$ = load(refundText);
+
+    refund$('.a-box-inner').each((_, el) => {
+      const refundDetails = refund$(el).find('.a-size-small.a-color-secondary').first().text().trim();
+      if (refundDetails === null) {
+        return;
+      }
+
+      const refundAmountArray = refundDetails.match(/\$\d+.\d+/);
+      if (!refundAmountArray) {
+        debugLog(`${prefix} Refund found but amount not found`);
+        return;
+      }
+      const refundAmount = moneyToNumber(refundAmountArray[0]);
+
+      const refundDateArray = refundDetails.match(/on\s([A-Za-z]+\s\d{1,2},\s\d{4})/);
+      if (!refundDateArray) {
+        debugLog(`${prefix} Refund found but date not found`);
+        return;
+      }
+
+      const refundDate = refundDateArray[1];
+
+      transactions.push({
+        id: order.id,
+        provider: Provider.Amazon,
+        date: refundDate,
+        amount: refundAmount,
+        refund: true,
+        items,
+      });
+
+      debugLog(
+        `${prefix} Found refund for order ${order.id} with date ${refundDate}, amount ${refundAmount}, and ${items.length} items`,
+      );
+    });
   }
 
   await debugLog(`${prefix} Found ${transactions.length} transactions for order ${order.id}`);
