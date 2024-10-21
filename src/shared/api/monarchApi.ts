@@ -1,9 +1,4 @@
-export type Transaction = {
-  id: string;
-  amount: number;
-  date: string;
-  notes: string;
-};
+import { MonarchTransaction } from '../types';
 
 export async function updateMonarchTransaction(authKey: string, id: string, note: string) {
   const body = {
@@ -44,7 +39,7 @@ export async function getTransactions(
   merchant: string,
   startDate?: Date,
   endDate?: Date,
-): Promise<Transaction[]> {
+): Promise<MonarchTransaction[]> {
   const body = {
     operationName: 'Web_GetTransactionsList',
     variables: {
@@ -69,6 +64,9 @@ export async function getTransactions(
             pending
             date
             notes
+            merchant {
+              name
+            }
           }
         }
       }
@@ -76,7 +74,14 @@ export async function getTransactions(
   };
 
   const result = await graphQLRequest(authKey, body);
-  return result.data.allTransactions.results;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return result.data.allTransactions.results.map((transaction: any) => ({
+    id: transaction.id,
+    amount: transaction.amount,
+    date: transaction.date,
+    notes: transaction.notes,
+    merchant: transaction.merchant.name,
+  }));
 }
 
 async function graphQLRequest(authKey: string, body: unknown) {

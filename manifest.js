@@ -9,10 +9,23 @@ const manifest = {
   name: 'Monarch / Amazon Sync',
   version: packageJson.version,
   description: packageJson.description,
-  permissions: ['storage', 'tabs', 'scripting', 'alarms', 'downloads'],
+  permissions: [
+    'alarms',
+    'declarativeNetRequest',
+    'declarativeNetRequestWithHostAccess',
+    'downloads',
+    'storage',
+    'scripting',
+    'tabs',
+  ],
   host_permissions: [
     'https://amazon.com/*',
     'https://www.amazon.com/*',
+    'https://walmart.com/*',
+    'https://www.walmart.com/*',
+    'https://costco.com/*',
+    'https://www.costco.com/*',
+    'https://ecom-api.costco.com/*',
     'https://app.monarchmoney.com/*',
     'https://api.monarchmoney.com/*',
   ],
@@ -34,6 +47,15 @@ const manifest = {
       matches: ['*://*/*'],
     },
   ],
+  declarative_net_request: {
+    rule_resources: [
+      {
+        id: 'ruleset_1',
+        enabled: true,
+        path: 'rules.json',
+      },
+    ],
+  },
 };
 
 export default manifest;

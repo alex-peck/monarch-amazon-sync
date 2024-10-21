@@ -23,11 +23,7 @@ export function ProgressIndicator({ progress }: { progress: ProgressState }) {
       return;
     }
 
-    const matches = matchTransactions(
-      transactions.transactions,
-      transactions.orders,
-      appData.options.overrideTransactions,
-    );
+    const matches = matchTransactions(transactions.transactions, transactions.orders, appData.options);
     const contents = matches.map(match => {
       return {
         amazonOrderId: match.amazon.id,

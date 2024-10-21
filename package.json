@@ -3,6 +3,7 @@
   "version": "0.2.0",
   "description": "Browser extension to sync Amazon order data to Monarch transactions.",
   "scripts": {
+    "prebuild": "check-node-version --package",
     "build": "tsc --noEmit && vite build",
     "build-and-zip": "pnpm build && rm -f chrome-monarch-amazon-sync.zip && cd dist && zip -r ../chrome-monarch-amazon-sync.zip .",
     "build-and-zip:firefox": "pnpm build:firefox && rm -f firefox-monarch-amazon-sync.zip && cd dist && zip -r ../firefox-monarch-amazon-sync.zip .",
@@ -43,6 +44,7 @@
     "@typescript-eslint/parser": "6.9.1",
     "@vitejs/plugin-react": "4.2.0",
     "autoprefixer": "^10.4.17",
+    "check-node-version": "^4.2.1",
     "chokidar": "3.5.3",
     "cross-env": "7.0.3",
     "dotenv-cli": "^7.3.0",
@@ -69,6 +71,7 @@
     "tslib": "2.6.2",
     "typescript": "5.2.2",
     "vite": "5.0.0",
+    "vite-plugin-static-copy": "^1.0.6",
     "vitest": "^0.34.6",
     "ws": "8.14.2"
   },
@@ -78,5 +81,8 @@
       "eslint --fix"
     ]
   },
-  "packageManager": "pnpm@8.9.2"
+  "packageManager": "pnpm@8.9.2",
+  "engines": {
+    "node": ">=20.15.1"
+  }
 }
