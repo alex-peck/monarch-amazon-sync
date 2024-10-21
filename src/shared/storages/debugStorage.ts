@@ -16,6 +16,7 @@ const debugStorage = createStorage<State>(
 );
 
 export async function debugLog(val: unknown) {
+  console.log(val);
   let stringValue: string;
   if (typeof val === 'object') {
     stringValue = (val as Error).stack ?? JSON.stringify(val);
@@ -27,7 +28,6 @@ export async function debugLog(val: unknown) {
   await debugStorage.set(state => ({
     logs: (state?.logs ?? []).concat([stringValue]),
   }));
-  console.log(val);
 }
 
 export default debugStorage;

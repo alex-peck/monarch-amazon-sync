@@ -8,6 +8,7 @@ import { Item, Order, OrderTransaction, Provider, ProviderInfo } from '../types'
 
 const ORDER_PAGES_URL = 'https://www.amazon.com/gp/css/order-history?disableCsd=no-js';
 const ORDER_DETAILS_URL = 'https://www.amazon.com/gp/your-account/order-details';
+const ORDER_INVOICE_URL = 'https://www.amazon.com/gp/css/summary/print.html';
 
 export async function checkAuth(): Promise<ProviderInfo> {
   try {
@@ -151,11 +152,18 @@ function orderListFromPage($: CheerioAPI): Order[] {
 }
 
 async function fetchOrderTransactions(order: Order): Promise<Order> {
-  await debugLog('Fetching order ' + order.id);
+  const prefix = `[AMZN#${order.id}]`;
+  await debugLog(`${prefix} Fetching order page & invoice page for order ${order.id}`);
+  const invoicePromise = fetch(ORDER_INVOICE_URL + '?orderID=' + order.id);
   const res = await fetch(ORDER_DETAILS_URL + '?orderID=' + order.id);
-  await debugLog('Got order response ' + res.status + ' for order ' + order.id);
+  await debugLog(`${prefix} Got order response ${res.status} for order ${order.id}`);
   const text = await res.text();
   const $ = load(text);
+
+  const invoiceRes = await invoicePromise;
+  await debugLog(`${prefix} Got invoice response ${invoiceRes.status} for order ${order.id}`);
+  const invoiceText = await invoiceRes.text();
+  const invoice$ = load(invoiceText);
 
   const items: Item[] = [];
   $('.yohtmlc-item').each((_, el) => {
@@ -186,54 +194,43 @@ async function fetchOrderTransactions(order: Order): Promise<Order> {
     });
   }
 
-  const fullDetails = $('.a-expander-inline-content ').first();
-  $(fullDetails)
-    .find('.a-row')
-    .each((_, el) => {
-      const line = $(el).text().trim().replaceAll('\n', '');
-      let dateAndAmount;
-      let date;
-      let amount;
-      let refund;
+  // div:contains returns an array of multiple, since a div has a div that has CC txns, and
+  // $('div:contains("Credit Card transactions"):not(:has(div:contains("Credit Card transactions")))')[0]
+  // would be silly
 
-      if (line.includes('Items shipped')) {
-        refund = false;
-        dateAndAmount = line.split('shipped:')[1].trim();
-        date = dateAndAmount.split('-')[0].trim();
-        amount = moneyToNumber(dateAndAmount.split('-')[1].split('$')[1]);
+  const creditCardDiv = invoice$('b:contains("Credit Card transactions")');
+  if (!creditCardDiv.length) {
+    debugLog(`${prefix} Credit card transactions not found - not yet charged`);
+  } else {
+    const creditCardTable = creditCardDiv.closest('tr').find('table');
+    if (!creditCardTable.length) {
+      const msg = `${prefix} Credit card transactions table not found`;
+      debugLog(msg);
+      throw new Error(msg);
+    } else {
+      creditCardTable.find('tr[valign="top"]').each((_, el) => {
+        const line = invoice$(el).find('td').first().text().trim();
+        const amount = moneyToNumber(invoice$(el).find('td').last().text().trim());
+
         transactions.push({
           id: order.id,
           provider: Provider.Amazon,
-          date,
+          date: line.split(':')[1].trim(),
           amount,
-          refund,
+          refund: false,
           items,
         });
-      } else if (line.includes('Refund: Completed')) {
-        refund = true;
-        dateAndAmount = line.split(': Completed')[1].trim();
-        date = dateAndAmount.split('-')[0].trim();
-        amount = moneyToNumber(dateAndAmount.split('-')[1].split('$')[1]);
-        transactions.push({
-          id: order.id,
-          provider: Provider.Amazon,
-          date,
-          amount,
-          refund,
-          items,
-        });
-      } else {
-        const err = `Unknown Amazon transaction line: ${line}`;
-        debugLog(err);
-        throw new Error(err);
-      }
 
-      debugLog(
-        `Found transaction for order ${order.id} with date ${date}, amount ${amount}, refund ${refund}, and ${items.length} items`,
-      );
-    });
+        debugLog(
+          `${prefix} Found transaction for order ${order.id} with date ${line
+            .split(':')[1]
+            .trim()}, amount ${amount}, and ${items.length} items`,
+        );
+      });
+    }
+  }
 
-  await debugLog('Found ' + transactions.length + ' transactions for order ' + order.id);
+  await debugLog(`${prefix} Found ${transactions.length} transactions for order ${order.id}`);
 
   return {
     ...order,
