@@ -1,5 +1,5 @@
 import useStorage from '@root/src/shared/hooks/useStorage';
-import appStorage from '@root/src/shared/storages/appStorage';
+import appStorage, { AuthStatus } from '@root/src/shared/storages/appStorage';
 import debugStorage from '@root/src/shared/storages/debugStorage';
 import { Label, TextInput, ToggleSwitch } from 'flowbite-react';
 import { useCallback, useEffect } from 'react';
@@ -17,6 +17,18 @@ export function Options() {
       filename: 'error-dump.txt',
     });
   }, [logs]);
+
+  const resetMonarchStatus = useCallback(async () => {
+    await appStorage.patch({
+      monarchKey: undefined,
+      lastMonarchAuth: undefined,
+      monarchStatus: AuthStatus.NotLoggedIn,
+    });
+  }, []);
+
+  const resetAmazonStatus = useCallback(async () => {
+    await appStorage.patch({ amazonStatus: AuthStatus.NotLoggedIn });
+  }, []);
 
   useEffect(() => {
     if (!options) {
@@ -56,6 +68,7 @@ export function Options() {
           name if it does not already match.
         </span>
       </div>
+
       {logs && logs.length > 0 && (
         <div className="mt-2">
           <button className="btn btn-primary" onClick={downloadDebugLog}>
@@ -63,6 +76,21 @@ export function Options() {
           </button>
         </div>
       )}
+
+      <div className="mt-2">
+        <button className="btn btn-primary" onClick={resetMonarchStatus}>
+          Reset Monarch connection status
+        </button>
+        <span className="mt-1 text-gray-500 text-xs font-normal">
+          If GraphQL requests to Monarch API fail, the extension cached an expired token. You must log out from Monarch,
+          reset the connection status using this button, and log in again.
+        </span>
+      </div>
+      <div className="mt-2">
+        <button className="btn btn-primary" onClick={resetAmazonStatus}>
+          Reset Amazon connection status
+        </button>
+      </div>
     </div>
   );
 }
