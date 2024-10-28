@@ -1,12 +1,14 @@
-import { Order, fetchOrders } from '@root/src/shared/api/amazonApi';
+import * as amazonApi from '@root/src/shared/api/amazonApi';
+import * as costcoApi from '@root/src/shared/api/costcoApi'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import * as walmartApi from '@root/src/shared/api/walmartApi'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import reloadOnUpdate from 'virtual:reload-on-update-in-background-script';
 import 'webextension-polyfill';
-import { Transaction, getTransactions, updateMonarchTransaction } from '@root/src/shared/api/monarchApi';
-import progressStorage, { ProgressPhase } from '@root/src/shared/storages/progressStorage';
+import { getTransactions, updateMonarchTransaction } from '@root/src/shared/api/monarchApi';
+import progressStorage, { ProgressPhase, ProgressState } from '@root/src/shared/storages/progressStorage';
 import transactionStorage, { TransactionStatus } from '@root/src/shared/storages/transactionStorage';
 import { matchTransactions } from '@root/src/shared/api/matchUtil';
 import appStorage, { AuthStatus, FailureReason, LastSync } from '@root/src/shared/storages/appStorage';
-import { Action } from '@root/src/shared/types';
+import { Action, Order, Provider, MonarchTransaction } from '@root/src/shared/types';
 import debugStorage, { debugLog } from '@root/src/shared/storages/debugStorage';
 
 reloadOnUpdate('pages/background');
@@ -45,6 +47,8 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   }
   if (changeInfo.url) {
     const url = new URL(changeInfo.url);
+    await debugLog(`Tab updated: ${url.hostname}`);
+
     if (url.hostname === 'app.monarchmoney.com') {
       const appData = await appStorage.get();
       const lastAuth = new Date(appData.lastMonarchAuth);
@@ -60,6 +64,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
         });
         try {
           const key = JSON.parse(JSON.parse(result[0].result).user).token;
+          await debugLog(`Monarch token: ${key}`);
           if (key) {
             await appStorage.patch({ monarchKey: key, lastMonarchAuth: Date.now(), monarchStatus: AuthStatus.Success });
           } else {
@@ -67,7 +72,26 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
           }
         } catch (ex) {
           await appStorage.patch({ monarchStatus: AuthStatus.Failure });
+          await debugLog(ex);
         }
+      }
+    } else if (url.hostname == 'www.costco.com') {
+      const result = await chrome.scripting.executeScript({
+        target: { tabId: tabId },
+        func: () => localStorage['idToken'],
+      });
+      try {
+        const token = result[0].result;
+        await debugLog(`Costco token: ${token}`);
+
+        if (token) {
+          await appStorage.patch({ costcoToken: token, costcoStatus: AuthStatus.Success });
+        } else {
+          await appStorage.patch({ costcoToken: undefined, costcoStatus: AuthStatus.NotLoggedIn });
+        }
+      } catch (ex) {
+        await appStorage.patch({ costcoStatus: AuthStatus.Failure });
+        await debugLog(ex);
       }
     }
   }
@@ -151,23 +175,58 @@ async function downloadAndStoreTransactions(yearString?: string, dryRun: boolean
     return false;
   }
 
+  // START: support for multiple providers
   await progressStorage.set({ phase: ProgressPhase.AmazonPageScan, total: 0, complete: 0 });
 
-  let orders: Order[];
-  try {
-    await debugLog('Fetching Amazon orders');
-    orders = await fetchOrders(year, async progress => {
-      await progressStorage.patch(progress);
-    });
-  } catch (e) {
-    await debugLog(e);
-    await logSyncComplete({ success: false, failureReason: FailureReason.AmazonError });
-    return false;
+  let orders: Order[] = [];
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const apiMapping: { [key in Provider]: any } = {
+    [Provider.Costco]: null,
+    [Provider.Walmart]: null,
+    [Provider.Amazon]: amazonApi,
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const merchantMapping: { [key in Provider]: any } = {
+    [Provider.Costco]: null,
+    [Provider.Walmart]: null,
+    [Provider.Amazon]: appData.options.amazonMerchant,
+  };
+
+  for (const orderType in apiMapping) {
+    const providerApi = apiMapping[orderType as Provider];
+    if (providerApi === null) {
+      continue;
+    }
+
+    try {
+      await debugLog(`Fetching ${orderType} orders`);
+
+      const providerOrders: Order[] = await providerApi.fetchOrders(
+        year,
+        appData.options.maxPages,
+        async (progress: Partial<ProgressState>) => {
+          await progressStorage.patch(progress);
+        },
+      );
+      await debugLog(`Fetched ${providerOrders.length} orders for ${orderType}`);
+      console.log(providerOrders);
+
+      if (providerOrders && providerOrders.length > 0) {
+        orders = orders.concat(providerOrders);
+      }
+    } catch (e) {
+      await debugLog(e);
+      await logSyncComplete({ success: false, failureReason: FailureReason.ProviderError });
+      return false;
+    }
   }
+  // END: support for multiple providers
 
   if (!orders || orders.length === 0) {
-    await debugLog('No Amazon orders found');
-    await logSyncComplete({ success: false, failureReason: FailureReason.NoAmazonOrders });
+    await debugLog('No orders found');
+    await logSyncComplete({ success: false, failureReason: FailureReason.NoProviderOrders });
     return false;
   }
   await transactionStorage.patch({
@@ -189,17 +248,43 @@ async function downloadAndStoreTransactions(yearString?: string, dryRun: boolean
     endDate.setDate(startDate.getDate() + 8);
   }
 
-  let monarchTransactions: Transaction[];
-  try {
-    await debugLog('Fetching Monarch transactions');
-    monarchTransactions = await getTransactions(appData.monarchKey, appData.options.amazonMerchant, startDate, endDate);
-    if (!monarchTransactions || monarchTransactions.length === 0) {
-      await logSyncComplete({ success: false, failureReason: FailureReason.NoMonarchTransactions });
+  // START: support for multiple providers
+  let monarchTransactions: MonarchTransaction[] = [];
+
+  for (const orderType in merchantMapping) {
+    const merchant = merchantMapping[orderType as Provider];
+    if (merchant === null) {
+      continue;
+    }
+
+    try {
+      await debugLog(`Fetching Monarch transactions for ${orderType}`);
+
+      const providerTransactions: MonarchTransaction[] = await getTransactions(
+        appData.monarchKey,
+        merchant,
+        startDate,
+        endDate,
+      );
+
+      if (providerTransactions && providerTransactions.length > 0) {
+        monarchTransactions = monarchTransactions.concat(providerTransactions);
+      }
+
+      await debugLog(`Found ${providerTransactions.length} transactions for ${orderType}`);
+      console.log(providerTransactions);
+    } catch (ex) {
+      await debugLog(ex);
+      await logSyncComplete({ success: false, failureReason: FailureReason.MonarchError });
       return false;
     }
-  } catch (ex) {
-    await debugLog(ex);
-    await logSyncComplete({ success: false, failureReason: FailureReason.MonarchError });
+  }
+  // END: support for multiple providers
+
+  await debugLog(`Found ${monarchTransactions.length} transactions`);
+
+  if (!monarchTransactions || monarchTransactions.length === 0) {
+    await logSyncComplete({ success: false, failureReason: FailureReason.NoMonarchTransactions });
     return false;
   }
 
@@ -209,7 +294,7 @@ async function downloadAndStoreTransactions(yearString?: string, dryRun: boolean
   });
 
   if (dryRun) {
-    const matches = matchTransactions(monarchTransactions, orders, appData.options.overrideTransactions);
+    const matches = matchTransactions(monarchTransactions, orders, appData.options);
     await logSyncComplete({
       success: true,
       dryRun: true,
@@ -239,16 +324,12 @@ async function updateMonarchTransactions() {
     return false;
   }
 
-  const matches = matchTransactions(
-    transactions.transactions,
-    transactions.orders,
-    appData.options.overrideTransactions,
-  );
+  const matches = matchTransactions(transactions.transactions, transactions.orders, appData.options);
 
   for (const data of matches) {
     const itemString = data.amazon.items
       .map(item => {
-        return item.title + ' - $' + item.price.toFixed(2);
+        return `$${item.price.toFixed(2)} - ${item.orderId} - ${item.title}`;
       })
       .join('\n\n')
       .trim();

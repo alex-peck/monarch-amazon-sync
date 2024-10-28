@@ -4,35 +4,14 @@ import type { CheerioAPI } from 'cheerio';
 import * as Throttle from 'promise-parallel-throttle';
 import { debugLog } from '../storages/debugStorage';
 import { AuthStatus } from '../storages/appStorage';
+import { Item, Order, OrderTransaction, Provider, ProviderInfo } from '../types';
 
 const ORDER_PAGES_URL = 'https://www.amazon.com/gp/css/order-history?disableCsd=no-js';
 const ORDER_DETAILS_URL = 'https://www.amazon.com/gp/your-account/order-details';
+const ORDER_INVOICE_URL = 'https://www.amazon.com/gp/css/summary/print.html';
+const ORDER_REFUND_URL = 'https://www.amazon.com/spr/returns/cart?_encoding=UTF8&orderId=';
 
-export type AmazonInfo = {
-  status: AuthStatus;
-  startingYear?: number;
-};
-
-export type Order = {
-  id: string;
-  date: string;
-  transactions?: OrderTransaction[];
-};
-
-export type Item = {
-  title: string;
-  price: number;
-};
-
-export type OrderTransaction = {
-  id: string;
-  amount: number;
-  date: string;
-  refund: boolean;
-  items: Item[];
-};
-
-export async function checkAmazonAuth(): Promise<AmazonInfo> {
+export async function checkAuth(): Promise<ProviderInfo> {
   try {
     debugLog('Checking Amazon auth');
     const res = await fetch(ORDER_PAGES_URL);
@@ -75,6 +54,7 @@ export async function checkAmazonAuth(): Promise<AmazonInfo> {
 
 export async function fetchOrders(
   year: number | undefined,
+  maxPages: number | undefined,
   onProgress: (progress: ProgressState) => void,
 ): Promise<Order[]> {
   let url = ORDER_PAGES_URL;
@@ -97,6 +77,10 @@ export async function fetchOrders(
       }
     }
   });
+
+  if (maxPages && maxPages < endPage) {
+    endPage = maxPages;
+  }
 
   onProgress({ phase: ProgressPhase.AmazonPageScan, total: endPage, complete: 0 });
 
@@ -131,7 +115,7 @@ export async function fetchOrders(
   return allOrders;
 }
 
-async function processOrders(year: number | undefined, page: number) {
+async function processOrders(year: number | undefined, page: number): Promise<Order[]> {
   const index = (page - 1) * 10;
   let url = ORDER_PAGES_URL + '&startIndex=' + index;
   if (year) {
@@ -158,6 +142,7 @@ function orderListFromPage($: CheerioAPI): Order[] {
         orders.push({
           id,
           date,
+          provider: Provider.Amazon,
         });
       }
     } catch (e: unknown) {
@@ -168,11 +153,18 @@ function orderListFromPage($: CheerioAPI): Order[] {
 }
 
 async function fetchOrderTransactions(order: Order): Promise<Order> {
-  await debugLog('Fetching order ' + order.id);
+  const prefix = `[AMZN#${order.id}]`;
+  await debugLog(`${prefix} Fetching order page & invoice page for order ${order.id}`);
+  const invoicePromise = fetch(ORDER_INVOICE_URL + '?orderID=' + order.id);
   const res = await fetch(ORDER_DETAILS_URL + '?orderID=' + order.id);
-  await debugLog('Got order response ' + res.status + ' for order ' + order.id);
+  await debugLog(`${prefix} Got order response ${res.status} for order ${order.id}`);
   const text = await res.text();
   const $ = load(text);
+
+  const invoiceRes = await invoicePromise;
+  await debugLog(`${prefix} Got invoice response ${invoiceRes.status} for order ${order.id}`);
+  const invoiceText = await invoiceRes.text();
+  const invoice$ = load(invoiceText);
 
   const items: Item[] = [];
   $('.yohtmlc-item').each((_, el) => {
@@ -180,8 +172,11 @@ async function fetchOrderTransactions(order: Order): Promise<Order> {
     const price = moneyToNumber($(el).find('.a-color-price').first()?.text());
     if (item) {
       items.push({
+        provider: Provider.Amazon,
+        orderId: order.id,
         title: item,
         price,
+        refunded: false, // Unknown actually
       });
     }
   });
@@ -192,6 +187,7 @@ async function fetchOrderTransactions(order: Order): Promise<Order> {
   if (giftCardAmount) {
     transactions.push({
       id: order.id,
+      provider: Provider.Amazon,
       date: order.date,
       amount: giftCardAmount,
       refund: false,
@@ -199,35 +195,87 @@ async function fetchOrderTransactions(order: Order): Promise<Order> {
     });
   }
 
-  const fullDetails = $('.a-expander-inline-content ').first();
-  $(fullDetails)
-    .find('.a-row')
-    .each((_, el) => {
-      const line = $(el).text().trim().replaceAll('\n', '');
-      if (line.includes('Items shipped')) {
-        const dateAndAmount = line.split('shipped:')[1].trim();
-        const date = dateAndAmount.split('-')[0].trim();
-        const amount = moneyToNumber(dateAndAmount.split('-')[1].split('$')[1]);
+  // div:contains returns an array of multiple, since a div has a div that has CC txns, and
+  // $('div:contains("Credit Card transactions"):not(:has(div:contains("Credit Card transactions")))')[0]
+  // would be silly
+
+  const creditCardDiv = invoice$('b:contains("Credit Card transactions")');
+  if (!creditCardDiv.length) {
+    debugLog(`${prefix} Credit card transactions not found - not yet charged`);
+  } else {
+    const creditCardTable = creditCardDiv.closest('tr').find('table');
+    if (!creditCardTable.length) {
+      const msg = `${prefix} Credit card transactions table not found`;
+      debugLog(msg);
+      throw new Error(msg);
+    } else {
+      creditCardTable.find('tr[valign="top"]').each((_, el) => {
+        const line = invoice$(el).find('td').first().text().trim();
+        const amount = moneyToNumber(invoice$(el).find('td').last().text().trim());
+
         transactions.push({
           id: order.id,
-          date,
+          provider: Provider.Amazon,
+          date: line.split(':')[1].trim(),
           amount,
           refund: false,
           items,
         });
-      } else if (line.includes('Refund: Completed')) {
-        const dateAndAmount = line.split(': Completed')[1].trim();
-        const date = dateAndAmount.split('-')[0].trim();
-        const amount = moneyToNumber(dateAndAmount.split('-')[1].split('$')[1]);
-        transactions.push({
-          id: order.id,
-          date,
-          amount,
-          refund: true,
-          items,
-        });
+
+        debugLog(
+          `${prefix} Found transaction for order ${order.id} with date ${line
+            .split(':')[1]
+            .trim()}, amount ${amount}, and ${items.length} items`,
+        );
+      });
+    }
+  }
+
+  const refundTotalSpan = $('span:contains("Refund Total")');
+  if (refundTotalSpan.length > 0) {
+    const refundUrl = ORDER_REFUND_URL + order.id;
+    const refundRes = await fetch(refundUrl);
+    await debugLog(`${prefix} Got refund response ${refundRes.status} for order ${order.id}`);
+    const refundText = await refundRes.text();
+    const refund$ = load(refundText);
+
+    refund$('.a-box-inner').each((_, el) => {
+      const refundDetails = refund$(el).find('.a-size-small.a-color-secondary').first().text().trim();
+      if (refundDetails === null) {
+        return;
       }
+
+      const refundAmountArray = refundDetails.match(/\$\d+.\d+/);
+      if (!refundAmountArray) {
+        debugLog(`${prefix} Refund found but amount not found`);
+        return;
+      }
+      const refundAmount = moneyToNumber(refundAmountArray[0]);
+
+      const refundDateArray = refundDetails.match(/on\s([A-Za-z]+\s\d{1,2},\s\d{4})/);
+      if (!refundDateArray) {
+        debugLog(`${prefix} Refund found but date not found`);
+        return;
+      }
+
+      const refundDate = refundDateArray[1];
+
+      transactions.push({
+        id: order.id,
+        provider: Provider.Amazon,
+        date: refundDate,
+        amount: refundAmount,
+        refund: true,
+        items,
+      });
+
+      debugLog(
+        `${prefix} Found refund for order ${order.id} with date ${refundDate}, amount ${refundAmount}, and ${items.length} items`,
+      );
     });
+  }
+
+  await debugLog(`${prefix} Found ${transactions.length} transactions for order ${order.id}`);
 
   return {
     ...order,
