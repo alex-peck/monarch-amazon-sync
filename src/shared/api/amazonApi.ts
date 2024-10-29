@@ -1,4 +1,4 @@
-import { ProgressPhase, ProgressState } from '../storages/progressStorage';
+import { ProgressPhase, updateProgress } from '../storages/progressStorage';
 import { load } from 'cheerio';
 import type { CheerioAPI } from 'cheerio';
 import * as Throttle from 'promise-parallel-throttle';
@@ -6,20 +6,25 @@ import { debugLog } from '../storages/debugStorage';
 import { AuthStatus } from '../storages/appStorage';
 
 const ORDER_PAGES_URL = 'https://www.amazon.com/gp/css/order-history?disableCsd=no-js';
-const ORDER_DETAILS_URL = 'https://www.amazon.com/gp/your-account/order-details';
+const ORDER_RETURNS_URL = 'https://www.amazon.com/spr/returns/cart';
+
+const ORDER_INVOICE_URL = 'https://www.amazon.com/gp/css/summary/print.html';
 
 export type AmazonInfo = {
   status: AuthStatus;
   startingYear?: number;
 };
 
+// Orders are placed on a single date, but can be paid for with multiple transactions
 export type Order = {
   id: string;
   date: string;
-  transactions?: OrderTransaction[];
+  items: Item[];
+  transactions: OrderTransaction[];
 };
 
 export type Item = {
+  quantity: number;
   title: string;
   price: number;
 };
@@ -29,7 +34,6 @@ export type OrderTransaction = {
   amount: number;
   date: string;
   refund: boolean;
-  items: Item[];
 };
 
 export async function checkAmazonAuth(): Promise<AmazonInfo> {
@@ -73,10 +77,7 @@ export async function checkAmazonAuth(): Promise<AmazonInfo> {
   }
 }
 
-export async function fetchOrders(
-  year: number | undefined,
-  onProgress: (progress: ProgressState) => void,
-): Promise<Order[]> {
+export async function fetchOrders(year: number | undefined): Promise<Order[]> {
   let url = ORDER_PAGES_URL;
   if (year) {
     url += `&timeFilter=year-${year}`;
@@ -98,24 +99,30 @@ export async function fetchOrders(
     }
   });
 
-  onProgress({ phase: ProgressPhase.AmazonPageScan, total: endPage, complete: 0 });
+  await updateProgress(ProgressPhase.AmazonPageScan, endPage, 0);
 
-  let orders = orderListFromPage($);
-  await debugLog('Found ' + orders.length + ' orders');
+  let orderCards = orderCardsFromPage($);
+  await debugLog('Found ' + orderCards.length + ' orders');
 
-  onProgress({ phase: ProgressPhase.AmazonPageScan, total: endPage, complete: 1 });
+  await updateProgress(ProgressPhase.AmazonPageScan, endPage, 1);
 
   for (let i = 2; i <= endPage; i++) {
     const ordersPage = await processOrders(year, i);
-    orders = orders.concat(ordersPage);
-    onProgress({ phase: ProgressPhase.AmazonPageScan, total: endPage, complete: i });
+    orderCards = orderCards.concat(ordersPage);
+    await updateProgress(ProgressPhase.AmazonPageScan, endPage, i);
   }
 
   const allOrders: Order[] = [];
 
-  const processOrder = async (order: Order) => {
+  const processOrder = async (orderCard: OrderCard) => {
     try {
-      const orderData = await fetchOrderTransactions(order);
+      const orderData = await fetchOrderDataFromInvoice(orderCard.id);
+      if (orderCard.hasRefund) {
+        const refundData = await fetchRefundTransactions(orderCard.id);
+        if (refundData) {
+          orderData.transactions = orderData.transactions.concat(refundData);
+        }
+      }
       if (orderData) {
         allOrders.push(orderData);
       }
@@ -123,10 +130,12 @@ export async function fetchOrders(
       await debugLog(e);
     }
 
-    onProgress({ phase: ProgressPhase.AmazonOrderDownload, total: orders.length, complete: allOrders.length });
+    await updateProgress(ProgressPhase.AmazonOrderDownload, orderCards.length, allOrders.length);
   };
 
-  await Throttle.all(orders.map(order => () => processOrder(order)));
+  await Throttle.all(orderCards.map(orderCard => () => processOrder(orderCard)));
+
+  console.log(allOrders);
 
   return allOrders;
 }
@@ -142,11 +151,17 @@ async function processOrders(year: number | undefined, page: number) {
   await debugLog('Got orders response ' + res.status + ' for page ' + page);
   const text = await res.text();
   const $ = load(text);
-  return orderListFromPage($);
+  return orderCardsFromPage($);
 }
 
-function orderListFromPage($: CheerioAPI): Order[] {
-  const orders: Order[] = [];
+type OrderCard = {
+  id: string;
+  hasRefund: boolean;
+};
+
+// Returns a list of order IDs on the page and whether the order contains a refund
+function orderCardsFromPage($: CheerioAPI): OrderCard[] {
+  const orders: OrderCard[] = [];
   $('.js-order-card').each((_, el) => {
     try {
       const id = $(el)
@@ -154,11 +169,8 @@ function orderListFromPage($: CheerioAPI): Order[] {
         ?.attr('href')
         ?.replace(/.*orderID=([^&#]+).*/, '$1');
       if (id) {
-        const date = $(el).find('.order-info .value')?.first().text().trim();
-        orders.push({
-          id,
-          date,
-        });
+        const hasRefund = $(el).find('span:contains("Return complete"), span:contains("Refunded")').length > 0;
+        orders.push({ id, hasRefund });
       }
     } catch (e: unknown) {
       debugLog(e);
@@ -167,74 +179,128 @@ function orderListFromPage($: CheerioAPI): Order[] {
   return orders;
 }
 
-async function fetchOrderTransactions(order: Order): Promise<Order> {
-  await debugLog('Fetching order ' + order.id);
-  const res = await fetch(ORDER_DETAILS_URL + '?orderID=' + order.id);
-  await debugLog('Got order response ' + res.status + ' for order ' + order.id);
+async function fetchRefundTransactions(orderId: string): Promise<OrderTransaction[]> {
+  await debugLog('Fetching order details ' + orderId);
+  const res = await fetch(ORDER_RETURNS_URL + '?orderID=' + orderId);
+  await debugLog('Got order invoice response ' + res.status + ' for order ' + orderId);
   const text = await res.text();
   const $ = load(text);
 
-  const items: Item[] = [];
-  $('.yohtmlc-item').each((_, el) => {
-    const item = $(el).find('.a-link-normal').first()?.text()?.trim();
-    const price = moneyToNumber($(el).find('.a-color-price').first()?.text());
-    if (item) {
-      items.push({
-        title: item,
-        price,
-      });
-    }
+  // TODO: We can parse out individual refunded items here
+  const transactions: OrderTransaction[] = [];
+  $('span.a-color-secondary:contains("refund issued on")').each((_, el) => {
+    const refundLine = $(el).text();
+    const refundAmount = refundLine.split('refund')[0].trim();
+    const refundDate = refundLine.split('on')[1].replace('.', '').trim();
+    transactions.push({
+      id: orderId,
+      date: refundDate,
+      amount: moneyToNumber(refundAmount),
+      refund: true,
+    });
   });
 
+  return transactions;
+}
+
+async function fetchOrderDataFromInvoice(orderId: string): Promise<Order> {
+  await debugLog('Fetching order invoice ' + orderId);
+  const res = await fetch(ORDER_INVOICE_URL + '?orderID=' + orderId);
+  await debugLog('Got order invoice response ' + res.status + ' for order ' + orderId);
+  const text = await res.text();
+  const $ = load(text);
+
+  const date = $('td b:contains("Order Placed:")')
+    .parent()
+    .contents()
+    .filter(function () {
+      return this.type === 'text';
+    })
+    .text()
+    .trim();
+
+  const order = {
+    id: orderId,
+    date: date,
+  };
+  console.log(order);
+
+  const items: Item[] = [];
   const transactions: OrderTransaction[] = [];
 
-  const giftCardAmount = moneyToNumber($('#od-subtotals .a-column:contains("Gift Card") + .a-column').text());
+  // Find the items ordered section and parse the items
+  // Orders can span multiple tables by order date
+  $('#pos_view_section:contains("Items Ordered")')
+    .find('table')
+    .find('table')
+    .find('table')
+    .find('table')
+    .each((i, table) => {
+      $(table)
+        .find('tbody tr')
+        .each((j, tr) => {
+          // Ignore first line as it's the header
+          if (j === 0) {
+            return;
+          }
+
+          const quantity = $(tr)
+            .find('td')
+            .eq(0)
+            .contents()
+            .filter(function () {
+              return this.type === 'text';
+            })
+            .text()
+            .replace('of:', '')
+            .trim();
+          const item = $(tr).find('td').eq(0).find('i').text().trim();
+          const price = $(tr).find('td').eq(1).text().trim();
+          if (item && price) {
+            items.push({
+              quantity: parseInt(quantity),
+              title: item,
+              price: moneyToNumber(price),
+            });
+          }
+        });
+    });
+
+  // Find any gift card transactions
+  const giftCardAmount = moneyToNumber($('td:contains("Gift Card Amount")').siblings().last().text());
   if (giftCardAmount) {
     transactions.push({
-      id: order.id,
+      id: orderId,
       date: order.date,
-      amount: giftCardAmount,
+      amount: giftCardAmount * -1,
       refund: false,
-      items,
     });
   }
 
-  const fullDetails = $('.a-expander-inline-content ').first();
-  $(fullDetails)
-    .find('.a-row')
-    .each((_, el) => {
-      const line = $(el).text().trim().replaceAll('\n', '');
-      if (line.includes('Items shipped')) {
-        const dateAndAmount = line.split('shipped:')[1].trim();
-        const date = dateAndAmount.split('-')[0].trim();
-        const amount = moneyToNumber(dateAndAmount.split('-')[1].split('$')[1]);
-        transactions.push({
-          id: order.id,
-          date,
-          amount,
-          refund: false,
-          items,
-        });
-      } else if (line.includes('Refund: Completed')) {
-        const dateAndAmount = line.split(': Completed')[1].trim();
-        const date = dateAndAmount.split('-')[0].trim();
-        const amount = moneyToNumber(dateAndAmount.split('-')[1].split('$')[1]);
-        transactions.push({
-          id: order.id,
-          date,
-          amount,
-          refund: true,
-          items,
-        });
-      }
+  // Find the transaction total - a single order can span multiple transactions
+  $("div:contains('Credit Card transactions')")
+    .parent()
+    .siblings()
+    .last()
+    .find('tr')
+    .each((i, tr) => {
+      const transactionDate = $(tr).find('td:first').text().trim().split(':')[1].replace(':', '').trim();
+      const total = $(tr).find('td:last').text().trim();
+      transactions.push({
+        id: orderId,
+        amount: moneyToNumber(total),
+        date: transactionDate,
+        refund: false,
+      });
     });
 
   return {
     ...order,
     transactions,
+    items,
   };
 }
 
-function moneyToNumber(money: string, absoluteValue = true) {
+export function moneyToNumber(money: string, absoluteValue = true) {
   return parseFloat(money?.replace(absoluteValue ? /[$\s-]/g : /[$\s]/g, ''));
 }

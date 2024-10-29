@@ -13,7 +13,17 @@ export type ProgressState = {
   phase: ProgressPhase;
   total: number;
   complete: number;
+  lastUpdated?: number;
 };
+
+export async function updateProgress(phase: ProgressPhase, total: number, complete: number) {
+  await progressStorage.set({
+    phase,
+    total,
+    complete,
+    lastUpdated: Date.now(),
+  });
+}
 
 const progressStorage = createStorage<ProgressState>(
   'progress',
@@ -21,6 +31,7 @@ const progressStorage = createStorage<ProgressState>(
     phase: ProgressPhase.Idle,
     total: 0,
     complete: 0,
+    lastUpdated: 0,
   },
   {
     storageType: StorageType.Local,

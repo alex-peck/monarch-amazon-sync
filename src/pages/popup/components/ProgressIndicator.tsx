@@ -36,7 +36,7 @@ export function ProgressIndicator({ progress }: { progress: ProgressState }) {
         monarchAmount: match.monarch.amount,
         amazonAmount: match.amazon.amount,
         refund: match.amazon.refund,
-        items: match.amazon.items,
+        items: match.items,
       };
     });
 

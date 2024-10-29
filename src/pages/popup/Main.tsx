@@ -16,28 +16,19 @@ const Main = () => {
   const appData = useStorage(appStorage);
   const syncAlarm = useAlarm('sync-alarm');
 
-  const actionOngoing = useMemo(
-    () => progress.phase !== ProgressPhase.Complete && progress.phase !== ProgressPhase.Idle,
-    [progress],
-  );
-
   // If the action is ongoing for more than 15 seconds, we assume it's stuck and mark it as complete
+  const actionOngoing = useMemo(() => {
+    return progress.phase !== ProgressPhase.Complete && progress.phase !== ProgressPhase.Idle;
+  }, [progress]);
   useEffect(() => {
     if (actionOngoing) {
-      const originalComplete = progress.complete;
-      const originalPhase = progress.phase;
-      const timeoutId = setTimeout(async () => {
-        const { complete, phase } = await progressStorage.get();
-        if (complete === originalComplete && phase == originalPhase) {
-          await progressStorage.patch({
-            phase: ProgressPhase.Complete,
-          });
-        }
-      }, 15_000);
-
-      return () => clearTimeout(timeoutId);
+      if ((progress.lastUpdated || 0) < Date.now() - 15_000) {
+        progressStorage.patch({
+          phase: ProgressPhase.Complete,
+        });
+      }
     }
-  }, [actionOngoing, progress.complete, progress.phase]);
+  }, [actionOngoing, progress.lastUpdated]);
 
   const [checkedAmazon, setCheckedAmazon] = useState(false);
 

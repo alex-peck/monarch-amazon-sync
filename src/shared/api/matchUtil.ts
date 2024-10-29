@@ -1,15 +1,16 @@
-import { Order, OrderTransaction } from './amazonApi';
-import { Transaction } from './monarchApi';
+import { Item, Order, OrderTransaction } from './amazonApi';
+import { MonarchTransaction } from './monarchApi';
 
 export type MatchedTransaction = {
-  monarch: Transaction;
+  monarch: MonarchTransaction;
   amazon: OrderTransaction;
+  items: Item[];
 };
 
 const DAYS_7 = 1000 * 60 * 60 * 24 * 7;
 
 export function matchTransactions(
-  transactions: Transaction[],
+  transactions: MonarchTransaction[],
   orders: Order[],
   override: boolean,
 ): MatchedTransaction[] {
@@ -17,7 +18,7 @@ export function matchTransactions(
     return (
       order.transactions?.map(transaction => {
         return {
-          items: transaction.items,
+          items: order.items,
           refund: transaction.refund,
           amount: transaction.refund ? transaction.amount : transaction.amount * -1,
           date: transaction.date,
@@ -74,6 +75,7 @@ export function matchTransactions(
     .map(transaction => {
       return {
         amazon: transaction.amazon,
+        items: transaction.amazon.items,
         monarch: transaction.monarch,
       };
     })

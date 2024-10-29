@@ -1,8 +1,8 @@
 import { Order, fetchOrders } from '@root/src/shared/api/amazonApi';
 import reloadOnUpdate from 'virtual:reload-on-update-in-background-script';
 import 'webextension-polyfill';
-import { Transaction, getTransactions, updateMonarchTransaction } from '@root/src/shared/api/monarchApi';
-import progressStorage, { ProgressPhase } from '@root/src/shared/storages/progressStorage';
+import { MonarchTransaction, getTransactions, updateMonarchTransaction } from '@root/src/shared/api/monarchApi';
+import progressStorage, { ProgressPhase, updateProgress } from '@root/src/shared/storages/progressStorage';
 import transactionStorage, { TransactionStatus } from '@root/src/shared/storages/transactionStorage';
 import { matchTransactions } from '@root/src/shared/api/matchUtil';
 import appStorage, { AuthStatus, FailureReason, LastSync } from '@root/src/shared/storages/appStorage';
@@ -151,14 +151,12 @@ async function downloadAndStoreTransactions(yearString?: string, dryRun: boolean
     return false;
   }
 
-  await progressStorage.set({ phase: ProgressPhase.AmazonPageScan, total: 0, complete: 0 });
+  await updateProgress(ProgressPhase.AmazonPageScan, 0, 0);
 
   let orders: Order[];
   try {
     await debugLog('Fetching Amazon orders');
-    orders = await fetchOrders(year, async progress => {
-      await progressStorage.patch(progress);
-    });
+    orders = await fetchOrders(year);
   } catch (e) {
     await debugLog(e);
     await logSyncComplete({ success: false, failureReason: FailureReason.AmazonError });
@@ -189,7 +187,7 @@ async function downloadAndStoreTransactions(yearString?: string, dryRun: boolean
     endDate.setDate(startDate.getDate() + 8);
   }
 
-  let monarchTransactions: Transaction[];
+  let monarchTransactions: MonarchTransaction[];
   try {
     await debugLog('Fetching Monarch transactions');
     monarchTransactions = await getTransactions(appData.monarchKey, appData.options.amazonMerchant, startDate, endDate);
@@ -246,9 +244,9 @@ async function updateMonarchTransactions() {
   );
 
   for (const data of matches) {
-    const itemString = data.amazon.items
+    const itemString = data.items
       .map(item => {
-        return item.title + ' - $' + item.price.toFixed(2);
+        return item.quantity + 'x ' + item.title + ' - $' + item.price.toFixed(2);
       })
       .join('\n\n')
       .trim();
