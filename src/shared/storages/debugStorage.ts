@@ -27,6 +27,7 @@ export async function debugLog(val: unknown) {
   await debugStorage.set(state => ({
     logs: (state?.logs ?? []).concat([stringValue]),
   }));
+  console.log(val);
 }
 
 export default debugStorage;

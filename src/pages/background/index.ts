@@ -67,6 +67,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
           }
         } catch (ex) {
           await appStorage.patch({ monarchStatus: AuthStatus.Failure });
+          debugLog(ex);
         }
       }
     }
