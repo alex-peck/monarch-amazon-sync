@@ -1,6 +1,6 @@
 {
   "name": "monarch-amazon-sync",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Browser extension to sync Amazon order data to Monarch transactions.",
   "scripts": {
     "build": "tsc --noEmit && vite build",
